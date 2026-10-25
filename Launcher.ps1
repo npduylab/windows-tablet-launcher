@@ -1760,9 +1760,6 @@ $ui.BtnPowerYes.Add_Click({
     $ui.PowerOverlay.Visibility = 'Collapsed'
 })
 
-$ScreenOffTimer = New-Object System.Windows.Threading.DispatcherTimer
-$ScreenOffTimer.Interval = [TimeSpan]::FromMilliseconds(1200)   # chờ nhấc tay khỏi màn hình
-$ScreenOffTimer.Add_Tick({ $ScreenOffTimer.Stop(); [TouchLauncher.Native]::MonitorOff() })
 
 # ---------------------------------------------------------------- Đa nhiệm
 $script:Hwnd   = [IntPtr]::Zero
@@ -2028,7 +2025,12 @@ $navXaml = @'
       <Setter Property="FontSize" Value="24"/>
     </Style>
   </Window.Resources>
-  <Border Background="#D91C1C1E" CornerRadius="34" Padding="4" BorderBrush="#40FFFFFF" BorderThickness="1">
+  <Grid>
+  <!-- Thu gọn: chỉ còn một vạch nhỏ ở mép màn hình -->
+  <Border x:Name="NavHandle" Visibility="Collapsed" Width="30" Height="130" Background="#01000000">
+    <Border x:Name="NavPill" Width="6" Height="84" CornerRadius="3" Background="#E6FFFFFF" BorderBrush="#59000000" BorderThickness="1"/>
+  </Border>
+  <Border x:Name="NavPanel" Background="#D91C1C1E" CornerRadius="34" Padding="4" BorderBrush="#40FFFFFF" BorderThickness="1">
     <StackPanel x:Name="NavStack">
       <Button x:Name="NavBack"   Style="{StaticResource Nav}"><TextBlock Style="{StaticResource NavIcon}" Text="&#xE72B;"/></Button>
       <Button x:Name="NavHome"   Style="{StaticResource Nav}"><TextBlock Style="{StaticResource NavIcon}" Text="&#xE80F;"/></Button>
@@ -2037,35 +2039,56 @@ $navXaml = @'
       <Button x:Name="NavCC"     Style="{StaticResource Nav}"><TextBlock Style="{StaticResource NavIcon}" Text="&#xE713;"/></Button>
     </StackPanel>
   </Border>
+  </Grid>
 </Window>
 '@
 
 $NavEnabled = -not ($cfg.navBar -and $cfg.navBar.enabled -eq $false)
 $NavPos     = if ($cfg.navBar.position) { [string]$cfg.navBar.position } else { 'right' }
 $NavIdle    = if ($cfg.navBar.opacity) { [double]$cfg.navBar.opacity } else { 0.6 }
+$NavAutoHide = -not ($cfg.navBar -and $cfg.navBar.autoHide -eq $false)
 
 $nav = [Windows.Markup.XamlReader]::Parse($navXaml)
-if ($NavPos -eq 'bottom') { $nav.FindName('NavStack').Orientation = 'Horizontal' }
+$NavPanel = $nav.FindName('NavPanel'); $NavHandle = $nav.FindName('NavHandle'); $NavPill = $nav.FindName('NavPill')
+if ($NavPos -eq 'bottom') {
+    $nav.FindName('NavStack').Orientation = 'Horizontal'
+    $NavHandle.Width = 130; $NavHandle.Height = 30; $NavPill.Width = 84; $NavPill.Height = 6
+}
 $nav.Opacity = $NavIdle
 $nav.Add_SourceInitialized({ [TouchLauncher.Native]::MakeNoActivate((New-Object System.Windows.Interop.WindowInteropHelper $nav).Handle) })
 
 function Set-NavPosition {
     $wa = [System.Windows.SystemParameters]::WorkArea
     $w = $nav.ActualWidth; $h = $nav.ActualHeight
+    $gap = if ($NavHandle.Visibility -eq 'Visible') { 0 } else { 6 }   # thu gọn: dính sát mép
     switch ($NavPos) {
-        'left'   { $nav.Left = $wa.Left + 6;                    $nav.Top = $wa.Top + ($wa.Height - $h) / 2 }
-        'bottom' { $nav.Left = $wa.Left + ($wa.Width - $w) / 2; $nav.Top = $wa.Bottom - $h - 6 }
-        default  { $nav.Left = $wa.Right - $w - 6;              $nav.Top = $wa.Top + ($wa.Height - $h) / 2 }
+        'left'   { $nav.Left = $wa.Left + $gap;                 $nav.Top = $wa.Top + ($wa.Height - $h) / 2 }
+        'bottom' { $nav.Left = $wa.Left + ($wa.Width - $w) / 2; $nav.Top = $wa.Bottom - $h - $gap }
+        default  { $nav.Left = $wa.Right - $w - $gap;           $nav.Top = $wa.Top + ($wa.Height - $h) / 2 }
     }
 }
 $nav.Add_Loaded({ Set-NavPosition })
 
-# Mờ khi không dùng, sáng lên khi chạm.
+# Tự ẩn: 4 giây không chạm -> thu thành vạch nhỏ ở mép; chạm vạch -> mở ra.
+# (Tắt bằng "navBar": { "autoHide": false } — khi đó thanh chỉ mờ đi.)
+function Expand-Nav {
+    $NavHandle.Visibility = 'Collapsed'; $NavPanel.Visibility = 'Visible'
+    $nav.Opacity = 1
+    $nav.UpdateLayout(); Set-NavPosition
+    $NavFade.Stop(); $NavFade.Start()
+}
+function Collapse-Nav {
+    if (-not $NavAutoHide) { $nav.Opacity = $NavIdle; return }
+    $NavPanel.Visibility = 'Collapsed'; $NavHandle.Visibility = 'Visible'
+    $nav.Opacity = 1
+    $nav.UpdateLayout(); Set-NavPosition
+}
 $NavFade = New-Object System.Windows.Threading.DispatcherTimer
-$NavFade.Interval = [TimeSpan]::FromSeconds(2.5)
-$NavFade.Add_Tick({ $NavFade.Stop(); $nav.Opacity = $NavIdle })
-$nav.Add_PreviewMouseDown({ $nav.Opacity = 1; $NavFade.Stop(); $NavFade.Start() })
-$nav.Add_PreviewTouchDown({ $nav.Opacity = 1; $NavFade.Stop(); $NavFade.Start() })
+$NavFade.Interval = [TimeSpan]::FromSeconds($(if ($NavAutoHide) { 4 } else { 2.5 }))
+$NavFade.Add_Tick({ $NavFade.Stop(); Collapse-Nav })
+# Chạm vạch: chỉ mở thanh (không để cú chạm đi tiếp xuống nút nào).
+$nav.Add_PreviewTouchDown({ param($s, $e) if ($NavHandle.Visibility -eq 'Visible') { Expand-Nav; $e.Handled = $true } else { $NavFade.Stop(); $NavFade.Start() } })
+$nav.Add_PreviewMouseDown({ param($s, $e) if ($NavHandle.Visibility -eq 'Visible') { Expand-Nav; $e.Handled = $true } else { $nav.Opacity = 1; $NavFade.Stop(); $NavFade.Start() } })
 
 $nav.FindName('NavBack').Add_Click({ Invoke-NavBack })
 $nav.FindName('NavHome').Add_Click({ Invoke-NavHome })
@@ -2081,6 +2104,122 @@ if ($NavEnabled) {
         default  { $ui.MainArea.Margin = '28,6,104,18'; $ui.SwitchDock.Margin = '40,24,112,24'; $ui.AppsDock.Margin = '40,24,112,24' }
     }
 }
+
+# ---------------------------------------------------------------- Chạm 2 lần
+# Hai lần chạm cách nhau dưới 0,45 giây và gần nhau -> true. $key tách riêng từng màn hình.
+$script:LastTap = @{}
+function Test-DoubleTap([string]$key, [System.Windows.Point]$p) {
+    $now = [Environment]::TickCount
+    $prev = $script:LastTap[$key]
+    $script:LastTap[$key] = @{ T = $now; P = $p }
+    if ($prev -and ($now - $prev.T) -lt 450 -and ([math]::Abs($p.X - $prev.P.X) + [math]::Abs($p.Y - $prev.P.Y)) -lt 120) {
+        $script:LastTap[$key] = $null
+        return $true
+    }
+    return $false
+}
+
+# ---------------------------------------------------------------- Vạch "về trang chủ" (vuốt lên, như iPhone/iPad)
+$HomeGesture = $cfg.homeGesture -ne $false
+$homeBarXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Touch Launcher Home Bar" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize" Width="360" Height="30"
+        Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" Stylus.IsTapFeedbackEnabled="False">
+  <Grid x:Name="HB" Background="#01000000">
+    <Border x:Name="HBPill" Width="150" Height="6" CornerRadius="3" Background="#E6FFFFFF" BorderBrush="#59000000" BorderThickness="1"
+            VerticalAlignment="Bottom" Margin="0,0,0,10">
+      <Border.RenderTransform><TranslateTransform x:Name="HBShift"/></Border.RenderTransform>
+    </Border>
+  </Grid>
+</Window>
+'@
+$homeBar = [Windows.Markup.XamlReader]::Parse($homeBarXaml)
+$homeBar.Add_SourceInitialized({ [TouchLauncher.Native]::MakeNoActivate((New-Object System.Windows.Interop.WindowInteropHelper $homeBar).Handle) })
+$HB = $homeBar.FindName('HB'); $HBShift = $homeBar.FindName('HBShift')
+
+function Set-HomeBarPosition {
+    $wa = [System.Windows.SystemParameters]::WorkArea
+    $homeBar.Left = $wa.Left + ($wa.Width - $homeBar.Width) / 2
+    $homeBar.Top = $wa.Bottom - $homeBar.Height
+}
+function Show-HomeBar { if ($HomeGesture -and -not $homeBar.IsVisible) { Set-HomeBarPosition; $homeBar.Show() } }
+
+# Vuốt lên > 40 điểm ảnh -> về trang chủ. Vạch nhích lên theo ngón tay để thấy phản hồi.
+$script:HbStart = $null
+$HB.Add_MouseLeftButtonDown({ param($s, $e)
+    $script:HbStart = $homeBar.PointToScreen($e.GetPosition($homeBar)).Y
+    $script:HbFired = $false
+    [void]$HB.CaptureMouse() })
+$HB.Add_MouseMove({ param($s, $e)
+    if ($null -eq $script:HbStart) { return }
+    $dy = ($script:HbStart - $homeBar.PointToScreen($e.GetPosition($homeBar)).Y) / (Get-DpiScale)
+    $HBShift.Y = -[math]::Max(0, [math]::Min(14, $dy * 0.35))
+    if ($dy -gt 40 -and -not $script:HbFired) { $script:HbFired = $true; Invoke-NavHome } })
+$HB.Add_MouseLeftButtonUp({
+    $script:HbStart = $null
+    $HB.ReleaseMouseCapture()
+    $HBShift.Y = 0 })
+
+# Chừa chỗ để vạch không đè lên Dock của launcher.
+if ($HomeGesture) {
+    $m = $ui.MainArea.Margin
+    $ui.MainArea.Margin = New-Object System.Windows.Thickness ($m.Left, $m.Top, $m.Right, ($m.Bottom + 16))
+}
+
+# ---------------------------------------------------------------- Tắt màn hình — chạm 2 lần để mở
+# Phủ màn đen lên mọi thứ rồi tắt màn hình. Chạm 1 lần (vô tình) màn hình có sáng lại nhưng vẫn đen,
+# rồi tự tắt lại sau 8 giây; chạm 2 lần liên tiếp mới mở. Bấm phím bất kỳ cũng mở.
+$blackXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Touch Launcher Screen Off" WindowStyle="None" ResizeMode="NoResize" Topmost="True" ShowInTaskbar="False"
+        Background="Black" Cursor="None"
+        Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" Stylus.IsTapFeedbackEnabled="False">
+  <Grid Background="Black">
+    <TextBlock x:Name="BsHint" Text="Chạm 2 lần để mở màn hình" FontFamily="Segoe UI" FontSize="22" Foreground="#80FFFFFF"
+               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,90" Opacity="0"/>
+  </Grid>
+</Window>
+'@
+$blackWin = [Windows.Markup.XamlReader]::Parse($blackXaml)
+$BsHint = $blackWin.FindName('BsHint')
+
+$BlackReoff = New-Object System.Windows.Threading.DispatcherTimer
+$BlackReoff.Interval = [TimeSpan]::FromSeconds(8)
+$BlackReoff.Add_Tick({ $BlackReoff.Stop(); $BsHint.Opacity = 0; if ($blackWin.IsVisible) { [TouchLauncher.Native]::MonitorOff() } })
+$BlackOff = New-Object System.Windows.Threading.DispatcherTimer
+$BlackOff.Interval = [TimeSpan]::FromMilliseconds(1200)   # chờ nhấc tay khỏi màn hình rồi mới tắt
+$BlackOff.Add_Tick({ $BlackOff.Stop(); if ($blackWin.IsVisible) { [TouchLauncher.Native]::MonitorOff() } })
+
+function Enter-ScreenOff {
+    Hide-CC
+    $blackWin.Left = [System.Windows.SystemParameters]::VirtualScreenLeft
+    $blackWin.Top = [System.Windows.SystemParameters]::VirtualScreenTop
+    $blackWin.Width = [System.Windows.SystemParameters]::VirtualScreenWidth
+    $blackWin.Height = [System.Windows.SystemParameters]::VirtualScreenHeight
+    $BsHint.Opacity = 0
+    if ($NavEnabled) { $nav.Hide() }
+    $homeBar.Hide()
+    $blackWin.Show()
+    [void]$blackWin.Activate()
+    $BlackOff.Start()
+}
+function Exit-ScreenOff {
+    $BlackOff.Stop(); $BlackReoff.Stop()
+    if ($blackWin.IsVisible) { $blackWin.Hide() }
+    if ($NavEnabled -and $ui.NightOverlay.Visibility -ne 'Visible') { $nav.Show() }
+    if ($ui.NightOverlay.Visibility -ne 'Visible') { Show-HomeBar }
+}
+$blackWin.Add_PreviewMouseLeftButtonDown({ param($s, $e)
+    $e.Handled = $true
+    if (Test-DoubleTap 'black' $e.GetPosition($blackWin)) { Exit-ScreenOff; return }
+    $BsHint.Opacity = 1
+    $BlackReoff.Stop(); $BlackReoff.Start() })
+$blackWin.Add_PreviewKeyDown({ param($s, $e) $e.Handled = $true; Exit-ScreenOff })
+# Không cho đóng bằng Alt+F4 (chỉ ẩn).
+$blackWin.Add_Closing({ param($s, $e) if (-not $script:AppClosing) { $e.Cancel = $true; Exit-ScreenOff } })
 
 # ---------------------------------------------------------------- Trung tâm điều khiển (nổi trên mọi app)
 $ccXaml = @'
@@ -2149,7 +2288,7 @@ $ccDefs = @(
                 $script:AutoKbd = -not $script:AutoKbd
                 Show-CcToast $(if ($script:AutoKbd) { 'Bàn phím cảm ứng sẽ tự hiện khi chạm vào ô nhập chữ.' } else { 'Đã tắt tự hiện bàn phím.' })
             } } }
-    @{ N = 'ScreenOff'; G = 0xE708; L = 'Tắt màn hình';    A = { Hide-CC; $ScreenOffTimer.Start() } }
+    @{ N = 'ScreenOff'; G = 0xE708; L = 'Tắt màn hình';    A = { Enter-ScreenOff } }
     @{ N = 'Pip';       G = 0xE8A7; L = 'PiP YouTube';     A = { Hide-CC; Switch-Pip } }
     @{ N = 'Sleep';     G = 0xE916; L = 'Hẹn giờ tắt';     A = { Switch-SleepTimer } }
     @{ N = 'Split';     G = 0xE90C; L = 'Chia đôi';        A = { Hide-CC; Start-SplitView } }
@@ -2216,7 +2355,7 @@ function Switch-CC {
 $ui.BtnStatus.Add_Click({ Switch-CC })
 
 # Xoay màn hình / đổi độ phân giải -> đặt lại vị trí.
-[System.Windows.SystemParameters]::add_StaticPropertyChanged({ param($s, $e) if ($e.PropertyName -eq 'WorkArea') { Set-NavPosition; Hide-CC } })
+[System.Windows.SystemParameters]::add_StaticPropertyChanged({ param($s, $e) if ($e.PropertyName -eq 'WorkArea') { Set-NavPosition; Set-HomeBarPosition; Hide-CC } })
 
 # ---------------------------------------------------------------- Việc nền (mạng, tải tệp) không làm đứng giao diện
 # Chạy scriptblock trong runspace riêng; khi xong gọi $done với kết quả trên luồng giao diện.
@@ -2365,8 +2504,7 @@ $SleepTimer.Add_Tick({
         $SleepTimer.Stop()
         Stop-AllMedia
         Exit-Night
-        Start-Sleep -Milliseconds 500
-        [TouchLauncher.Native]::MonitorOff()
+        Enter-ScreenOff
     }
 })
 function Get-SleepMinutesLeft { if ($script:SleepAt) { [int][math]::Ceiling(($script:SleepAt - (Get-Date)).TotalMinutes) } else { 0 } }
@@ -2563,6 +2701,7 @@ function Enter-Night([bool]$auto) {
     Show-NextPhoto
     $NightTimer.Start()
     if ($NavEnabled) { $nav.Hide() }
+    $homeBar.Hide()
     $b = Get-Battery
     if (-not $b -or $b.Charging) { [TouchLauncher.Native]::KeepDisplayOn($true) }
 }
@@ -2572,15 +2711,17 @@ function Exit-Night {
     [TouchLauncher.Native]::KeepDisplayOn($false)
     $ui.NightOverlay.Visibility = 'Collapsed'
     if ($NavEnabled -and -not $nav.IsVisible) { $nav.Show() }
+    Show-HomeBar
     foreach ($img in $ui.NightPhotoA, $ui.NightPhotoB) {
         $img.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $null); $img.Opacity = 0; $img.Source = $null
     }
     $script:NightFront = $null
     $script:NightPhotos = $null   # đọc lại thư mục ảnh lần sau (có thể đã thêm ảnh mới)
 }
-# Chạm bất kỳ đâu để thoát.
-$ui.NightOverlay.Add_PreviewMouseDown({ param($s, $e) Exit-Night; $e.Handled = $true })
-$ui.NightOverlay.Add_PreviewTouchDown({ param($s, $e) Exit-Night; $e.Handled = $true })
+# Chạm 2 lần để thoát (tránh chạm nhầm lúc ngủ); chạm 1 lần chỉ hiện lời nhắc.
+$ui.NightOverlay.Add_PreviewMouseLeftButtonDown({ param($s, $e)
+    $e.Handled = $true
+    if (Test-DoubleTap 'night' $e.GetPosition($win)) { Exit-Night } else { Show-Toast 'Chạm 2 lần để thoát đồng hồ.' } })
 
 # Tự bật khi: đang sạc + launcher đang ở trang chủ + không chạm máy N phút.
 $IdleTimer = New-Object System.Windows.Threading.DispatcherTimer([System.Windows.Threading.DispatcherPriority]::Background)
@@ -2882,7 +3023,11 @@ $win.Add_Deactivated({
     if ($ui.SwitchOverlay.Visibility -eq 'Visible') { Hide-Switcher }
     $TrimTimer.Start()
 })
-$win.Add_Closed({ $nav.Close(); $ccWin.Close(); $splitWin.Close(); [TouchLauncher.Native]::KeepDisplayOn($false) })
+$win.Add_Closed({
+    $script:AppClosing = $true
+    $nav.Close(); $ccWin.Close(); $splitWin.Close(); $homeBar.Close(); $blackWin.Close()
+    [TouchLauncher.Native]::KeepDisplayOn($false)
+})
 $win.Add_ContentRendered({
     if ($cfg.autoCleanOnStart) {
         $r = Stop-Junk $cfg.killList
@@ -2891,7 +3036,8 @@ $win.Add_ContentRendered({
     if ($cfg.autoKeyboard -and -not $script:AutoKbd) {
         if (Set-AutoKeyboard $true) { $script:AutoKbd = $true; Show-Toast 'Đã bật: bàn phím cảm ứng tự hiện khi chạm vào ô nhập chữ.' }
     }
-    if ($NavEnabled -and -not $nav.IsVisible) { $nav.Show() }
+    if ($NavEnabled -and -not $nav.IsVisible) { $nav.Show(); $NavFade.Start() }
+    Show-HomeBar
     $IdleTimer.Start()
     $UpdateDelay.Start()
     Optimize-Self
