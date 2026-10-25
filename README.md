@@ -77,6 +77,9 @@ Thoát hẳn Claude Desktop rồi mở lại, sau đó nói: *"Mở YouTube tìm
 ### Quyền riêng tư
 Launcher không gửi dữ liệu đi đâu. Mọi thứ chạy trên máy bạn; đăng nhập các web app nằm trong trình duyệt của bạn.
 
+### Đóng góp
+Mọi đóng góp đều được chào đón: báo lỗi, đề xuất app web, sửa câu chữ, viết tính năng. Đọc [CONTRIBUTING.md](CONTRIBUTING.md) để bắt đầu. Việc dễ nhất cho người mới: thêm một app web vào `launcher.config.json`. Có câu hỏi thì vào [Discussions](https://github.com/npduylab/windows-tablet-launcher/discussions).
+
 ---
 
 ## English
@@ -112,6 +115,9 @@ For Claude Code: `claude mcp add touch-launcher -- python -I path\to\mcp\touch_l
 
 ### Privacy
 No telemetry, no network calls of its own. Everything runs locally; web app logins live in your browser.
+
+### Contributing
+Bug reports, web-app suggestions, translations and features are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Questions go to [Discussions](https://github.com/npduylab/windows-tablet-launcher/discussions).
 
 ## License
 [MIT](LICENSE)

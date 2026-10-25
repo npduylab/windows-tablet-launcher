@@ -1,0 +1,36 @@
+# Phát hành tự động: đẩy tag dạng v1.2.3 -> build exe đúng phiên bản -> tạo GitHub Release kèm exe.
+#   git tag v1.2.0
+#   git push origin v1.2.0
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kiểm tra cấu hình
+        shell: powershell
+        run: .\tests\validate_config.ps1
+
+      - name: Build TouchLauncher.exe
+        shell: powershell
+        run: .\build.ps1 -Version '${{ github.ref_name }}'
+
+      - name: Tạo GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $hash = (Get-FileHash dist\TouchLauncher.exe -Algorithm SHA256).Hash
+          gh release create '${{ github.ref_name }}' dist\TouchLauncher.exe `
+            --title 'Touch Launcher ${{ github.ref_name }}' `
+            --generate-notes `
+            --notes "SHA-256 TouchLauncher.exe: $hash  ·  Exe chưa ký số: nếu SmartScreen cảnh báo, chọn More info → Run anyway."

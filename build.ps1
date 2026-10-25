@@ -2,9 +2,11 @@
   Build TouchLauncher.exe (một tệp duy nhất, nhúng sẵn Launcher.ps1 + cấu hình mặc định + MCP server).
   Dùng trình biên dịch C# có sẵn trong Windows (.NET Framework 4) — không cần cài Visual Studio.
 
-    powershell -ExecutionPolicy Bypass -File build.ps1
+    powershell -ExecutionPolicy Bypass -File build.ps1                 # phiên bản lấy từ tệp VERSION
+    powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.2.0  # chỉ định phiên bản (CI dùng theo tag)
   Kết quả: dist\TouchLauncher.exe
 #>
+param([string]$Version)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
@@ -60,6 +62,23 @@ $bw.Close()
 [System.IO.File]::WriteAllBytes((Join-Path $build 'icon-256.png'), $images[-1])
 "Icon: $ico"
 
+# ---------------------------------------------------------------- Phiên bản
+if (-not $Version) { $Version = (Get-Content (Join-Path $root 'VERSION') -Raw).Trim() }
+$Version = $Version.TrimStart('v')
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Phiên bản không hợp lệ: '$Version' (cần dạng 1.2.3)." }
+$asmInfo = Join-Path $build 'AssemblyInfo.cs'
+[System.IO.File]::WriteAllText($asmInfo, @"
+using System.Reflection;
+[assembly: AssemblyTitle("Touch Launcher")]
+[assembly: AssemblyProduct("Windows Tablet Launcher")]
+[assembly: AssemblyDescription("iPad-style touch launcher for Windows")]
+[assembly: AssemblyCompany("npduylab")]
+[assembly: AssemblyCopyright("MIT License - Nguyen Phuc Duy (npduylab) and contributors")]
+[assembly: AssemblyVersion("$Version.0")]
+[assembly: AssemblyFileVersion("$Version.0")]
+[assembly: AssemblyInformationalVersion("$Version")]
+"@, (New-Object System.Text.UTF8Encoding $false))
+
 # ---------------------------------------------------------------- Biên dịch
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $csc)) { $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
@@ -73,7 +92,7 @@ $cscArgs = @(
     "/resource:$(Join-Path $root 'Launcher.ps1'),Launcher.ps1",
     "/resource:$(Join-Path $root 'launcher.config.json'),launcher.config.json",
     "/resource:$(Join-Path $root 'mcp\touch_launcher_mcp.py'),touch_launcher_mcp.py",
-    (Join-Path $root 'src\TouchLauncher.cs')
+    (Join-Path $root 'src\TouchLauncher.cs'), $asmInfo
 )
 & $csc @cscArgs
 if ($LASTEXITCODE -ne 0) { throw "Biên dịch thất bại (mã $LASTEXITCODE)." }

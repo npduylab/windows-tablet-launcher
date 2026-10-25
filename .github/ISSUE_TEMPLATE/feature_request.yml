@@ -1,0 +1,22 @@
+name: ✨ Đề xuất tính năng / Feature request
+description: Ý tưởng làm launcher tốt hơn
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Bạn muốn làm được gì? / What do you want to do?
+      description: Mô tả nhu cầu thay vì giải pháp, ví dụ "tôi muốn nghe nhạc trước khi ngủ mà nhạc tự tắt". / Describe the need, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Ý tưởng của bạn / Your idea
+      description: Nút ở đâu, thao tác thế nào… / Where would it live, how would it work…
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Đóng góp / Contribute
+      options:
+        - label: Mình có thể tự làm và gửi pull request / I can work on this and send a pull request

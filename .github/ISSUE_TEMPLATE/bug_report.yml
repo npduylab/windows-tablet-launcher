@@ -1,0 +1,49 @@
+name: 🐞 Báo lỗi / Bug report
+description: Launcher chạy sai, bị treo hoặc hiển thị lỗi
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã báo lỗi! Đừng dán thông tin cá nhân (email, mật khẩu, tiêu đề tin nhắn…) vào đây.
+        Thanks for reporting! Please don't paste personal info (emails, passwords, message titles…).
+  - type: textarea
+    id: what
+    attributes:
+      label: Chuyện gì xảy ra? / What happened?
+      description: Mô tả lỗi, và bạn mong đợi điều gì. / Describe the bug and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Các bước để gặp lỗi / Steps to reproduce
+      placeholder: |
+        1. Mở Thư viện
+        2. Nhấn giữ app YouTube
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Phiên bản / Version
+      description: Chuột phải TouchLauncher.exe → Properties → Details, hoặc "chạy từ mã nguồn".
+      placeholder: "1.1.0"
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows
+      options: [Windows 11, Windows 10, Khác / Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Thiết bị / Device
+      options: [Laptop màn hình cảm ứng / Touch laptop, Máy tính bảng / Tablet (Surface…), Không có cảm ứng / No touch screen]
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Ảnh chụp màn hình / Screenshot
+      description: Nếu có — nhớ che thông tin riêng tư. / Optional — hide private info.

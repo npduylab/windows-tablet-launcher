@@ -1,0 +1,30 @@
+name: 📱 Đề xuất app web mới / Suggest a web app
+description: Thêm một trang web vào Thư viện ứng dụng (vd. Zalo, Spotify, VieON…)
+labels: [app-request, good first issue]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Tên app / App name
+      placeholder: Zalo
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Địa chỉ web / URL
+      placeholder: https://chat.zalo.me
+    validations:
+      required: true
+  - type: dropdown
+    id: group
+    attributes:
+      label: Nhóm / Group
+      options: [Âm nhạc & Video, Mạng xã hội, Tiện ích, Trợ lý AI, Trò chơi, Khác]
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Vì sao nên thêm? / Why?
+      description: Ai sẽ dùng, có chạy tốt dưới dạng app web toàn màn hình không. / Who uses it, does it work well as a full-screen web app?

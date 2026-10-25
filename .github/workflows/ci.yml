@@ -1,0 +1,57 @@
+# Kiểm tra tự động cho mọi push và pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cú pháp PowerShell
+        shell: powershell
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $errs = $null; $tok = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tok, [ref]$errs)
+            foreach ($e in $errs) { "::error file=$($_.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)"; $bad++ }
+          }
+          if ($bad) { exit 1 }
+          "Không có lỗi cú pháp."
+
+      - name: Cấu hình launcher.config.json
+        shell: powershell
+        run: .\tests\validate_config.ps1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: MCP server
+        run: python -I tests/test_mcp.py
+
+      - name: Build TouchLauncher.exe
+        shell: powershell
+        run: .\build.ps1
+
+      - name: Chạy thử launcher (-Check)
+        shell: powershell
+        run: |
+          $p = Start-Process dist\TouchLauncher.exe -ArgumentList '-Check' -RedirectStandardOutput out.txt -RedirectStandardError err.txt -PassThru -Wait
+          Get-Content out.txt -Encoding UTF8
+          $err = Get-Content err.txt -Raw -Encoding UTF8
+          if ($err) { "::warning::$err" }
+          if (-not (Select-String -Path out.txt -Pattern 'Bộ sưu tập: \d+ app' -Quiet)) { "::error::Launcher không tải được giao diện"; exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TouchLauncher-exe
+          path: dist/TouchLauncher.exe

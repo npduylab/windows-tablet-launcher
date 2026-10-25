@@ -15,13 +15,7 @@ using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("Touch Launcher")]
-[assembly: AssemblyProduct("Windows Tablet Launcher")]
-[assembly: AssemblyDescription("iPad-style touch launcher for Windows")]
-[assembly: AssemblyCompany("npduylab")]
-[assembly: AssemblyCopyright("MIT License - Nguyen Phuc Duy (npduylab)")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+// Thông tin phiên bản (AssemblyVersion…) do build.ps1 sinh ra trong build\AssemblyInfo.cs.
 
 static class Program
 {
