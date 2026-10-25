@@ -6,6 +6,12 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 
 [🇻🇳 Tiếng Việt](#tiếng-việt) · [🇬🇧 English](#english)
 
+![Màn hình chính — Home screen](docs/screenshots/home.png)
+
+| Thư viện ứng dụng — App Library | Trung tâm điều khiển — Control Center | Tìm kiếm & Hỏi Claude — Search |
+|---|---|---|
+| ![Thư viện ứng dụng](docs/screenshots/library.png) | ![Trung tâm điều khiển](docs/screenshots/control-center.png) | ![Tìm kiếm](docs/screenshots/search.png) |
+
 ---
 
 ## Tiếng Việt

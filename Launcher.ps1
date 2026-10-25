@@ -590,7 +590,7 @@ $xaml = @'
             <WrapPanel x:Name="TilePanel" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,4,0,0"/>
           </ScrollViewer>
           <Border x:Name="SpotResults" Grid.Row="1" Visibility="Collapsed" VerticalAlignment="Top" MaxWidth="640" Margin="12,0"
-                  Background="#F21C1C1E" CornerRadius="24" Padding="10" BorderBrush="#3A3A3C" BorderThickness="1">
+                  Background="#1C1C1E" CornerRadius="24" Padding="10" BorderBrush="#3A3A3C" BorderThickness="1">
             <StackPanel x:Name="SpotList"/>
           </Border>
         </Grid>
@@ -608,7 +608,7 @@ $xaml = @'
     </Grid>
 
     <!-- Thư viện ứng dụng -->
-    <Grid x:Name="AppsOverlay" Background="#EE0C0C12" Visibility="Collapsed">
+    <Grid x:Name="AppsOverlay" Background="#FA0C0C12" Visibility="Collapsed">
       <DockPanel x:Name="AppsDock" Margin="40,24,40,24">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
           <TextBlock DockPanel.Dock="Left" Text="Thư viện ứng dụng" FontSize="36" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0"/>
@@ -638,7 +638,7 @@ $xaml = @'
     </Grid>
 
     <!-- Đa nhiệm -->
-    <Grid x:Name="SwitchOverlay" Background="#EE0C0C12" Visibility="Collapsed">
+    <Grid x:Name="SwitchOverlay" Background="#FA0C0C12" Visibility="Collapsed">
       <DockPanel x:Name="SwitchDock" Margin="40,24,40,24">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16" LastChildFill="False">
           <TextBlock DockPanel.Dock="Left" Text="Đa nhiệm" FontSize="36" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -1359,7 +1359,7 @@ function Update-Spot {
 
     $claudeTile = Get-Tile 'Claude'
     if (-not $claudeTile) { $claudeTile = [pscustomobject]@{ icon = '✳'; color = '#D97757'; type = 'app' } }
-    Add-SpotRow $claudeTile "Hỏi Claude: “$q”" @{ Kind = 'claude'; Q = $q }
+    Add-SpotRow $claudeTile ('Hỏi Claude: "{0}"' -f $q) @{ Kind = 'claude'; Q = $q }
     foreach ($t in @($cfg.tiles | Where-Object { $_.name.IndexOf($q, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 5)) {
         Add-SpotRow $t $t.name @{ Kind = 'app'; Q = $q; Tile = $t }
     }
