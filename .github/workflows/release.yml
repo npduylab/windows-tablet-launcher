@@ -25,7 +25,8 @@ jobs:
         run: .\build.ps1 -Version '${{ github.ref_name }}'
 
       - name: Tạo GitHub Release
-        shell: powershell
+        # pwsh (PowerShell 7) đọc tệp tạm UTF-8 đúng -> ghi chú tiếng Việt không bị lỗi font.
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
