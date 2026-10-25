@@ -14,3 +14,7 @@ __pycache__/
 
 # Tài liệu truyền thông nội bộ
 TruyenThong.md
+
+# Dữ liệu riêng của người dùng (app tự thêm và icon tải về)
+apps.user.json
+icons/
