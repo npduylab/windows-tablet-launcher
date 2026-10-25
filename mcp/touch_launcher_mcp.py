@@ -175,9 +175,20 @@ def launch_and_maximize(args, maximize=True):
     return None
 
 
+def main_profile(cfg, browser):
+    """Hồ sơ Chrome cố định cho các app (giống launcher): browserProfile, mặc định 'Default'."""
+    prof = cfg.get("browserProfile") or ""
+    if browser and os.path.basename(browser).lower() == "chrome.exe":
+        prof = prof or "Default"
+        if not os.path.isdir(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "User Data", prof)):
+            return None
+    return prof or None
+
+
 def open_web_app(url, cfg=None, profile=None):
     cfg = cfg or load_config()
     browser = find_browser(cfg)
+    profile = profile or main_profile(cfg, browser)
     if not browser:
         os.startfile(url)
         return "Đã mở bằng trình duyệt mặc định."
@@ -276,7 +287,9 @@ def t_open_app(a):
     if kind == "web":
         browser = find_browser(cfg)
         if browser:
-            launch_and_maximize([browser, target] + list(cfg.get("browserArgs") or []), cfg.get("appWindowMode") != "normal")
+            prof = tile.get("profile") or main_profile(cfg, browser)
+            extra = [f"--profile-directory={prof}"] if prof else []
+            launch_and_maximize([browser] + extra + [target] + list(cfg.get("browserArgs") or []), cfg.get("appWindowMode") != "normal")
         else:
             os.startfile(target)
         return f"Đã mở {tile['name']}."

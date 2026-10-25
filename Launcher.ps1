@@ -387,8 +387,15 @@ $BrowserArgs = @($cfg.browserArgs | Where-Object { $_ })
 $BrowserName = if ($Browser) { [IO.Path]::GetFileNameWithoutExtension($Browser) } else { '' }
 $VolumeStep = if ($cfg.volumeStep) { [int]$cfg.volumeStep } else { 2 }
 
+# Hồ sơ Chrome chính cho mọi app: "browserProfile" trong cấu hình; để trống thì dùng "Default".
+# Nếu không chỉ định, Chrome mở bằng hồ sơ dùng gần nhất — đổi liên tục nên app trông như "quên đăng nhập".
+$MainProfile = if ($cfg.browserProfile) { [string]$cfg.browserProfile } else { 'Default' }
+if ($BrowserName -eq 'chrome' -and -not (Test-Path (Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data\$MainProfile"))) { $MainProfile = $null }
+if ($BrowserName -eq 'msedge' -and -not $cfg.browserProfile) { $MainProfile = $null }
+
 function Start-Browser([string[]]$parts, [string]$profileDir) {
     $a = @()
+    if (-not $profileDir) { $profileDir = $MainProfile }
     if ($profileDir) { $a += "--profile-directory=`"$profileDir`"" }
     $a += $BrowserArgs
     $a += $parts
@@ -3331,6 +3338,7 @@ if ($Check) {
     "Cửa sổ đang mở: $($open.Count). PiP tìm thấy: $(if (Find-PipWindow) { (Find-PipWindow).Title } else { '(chưa mở YouTube)' })"
     "Màn hình chính: $($ui.TilePanel.Children.Count) icon. Dock: $($ui.DockFav.Children.Count) + $($ui.DockRecent.Children.Count). Bộ sưu tập: $($script:AppItems.Count) app trong $(@($script:Sections).Count) nhóm. Lịch: $($ui.CalTitle.Text), $($ui.CalGrid.Children.Count) ô, $($ui.LunarText.Text). Trung tâm điều khiển: $($CcGrid.Children.Count) nút."
     "Trình duyệt: $Browser."
+    "Hồ sơ Chrome chính cho các app: $(if ($MainProfile) { $MainProfile } else { '(theo Chrome)' })."
     "Tài khoản Google trong Chrome: $(@(Get-ChromeGoogleAccounts | ForEach-Object { "$($_.Email) [$($_.Profile)]" }) -join ', '). Vừa nhập: $(if ($script:ImportedGmail) { @($script:ImportedGmail).Count } else { 0 })."
     "Thư mục trên trang chủ: $(@($script:FolderKids.Keys | ForEach-Object { "$_ ($(@($script:FolderKids[$_]).Count) app: $($script:FolderKids[$_] -join ', '))" }) -join '; '). Chấm đỏ đang theo dõi: $($script:BadgeEls.Count) icon."
     Update-NowPlaying

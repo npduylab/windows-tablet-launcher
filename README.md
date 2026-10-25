@@ -72,7 +72,7 @@ Kết quả nằm ở `dist\TouchLauncher.exe`. Nếu chép exe vào cạnh `Lau
 ### Tuỳ chỉnh — `launcher.config.json`
 - `tiles`: các app. `type`: `app` (web dạng ứng dụng) / `web` / `uri` / `exe`; `icon`: mã glyph Segoe Fluent (vd `E8D6`) hoặc một ký tự; `color`, `fg`; `group`: nhóm trong Thư viện; `match`: biểu thức tiêu đề cửa sổ để không mở trùng.
 - `home`: app mặc định trên trang chủ (sau đó lưu ở `pinned.json`). `dock`: app trên Dock.
-- `browser`: `chrome` / `edge`. `appWindowMode`: `maximized` / `normal`.
+- `browser`: `chrome` / `edge`. `browserProfile`: hồ sơ Chrome cố định cho mọi app (mặc định `Default`) — để app luôn nhớ đăng nhập; icon Gmail từng tài khoản dùng hồ sơ riêng của nó. `appWindowMode`: `maximized` / `normal`.
 - `navBar.position`: `right` / `left` / `bottom`. `pip.position`: `bottom-right` / `bottom-left` / `top-right` / `top-left`.
 - `autoKeyboard`: tự hiện bàn phím cảm ứng. `killList` / `killListOptional`: tiến trình cần dọn.
 - `wallpaper`: đường dẫn ảnh nền. `claudeUrl`: địa chỉ "Hỏi Claude".

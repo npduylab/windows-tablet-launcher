@@ -1,5 +1,6 @@
 {
   "browser": "chrome",
+  "browserProfile": "Default",
   "browserArgs": [],
   "appWindowMode": "maximized",
   "minimizeOnLaunch": true,
