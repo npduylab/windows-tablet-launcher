@@ -1,0 +1,8 @@
+# Dữ liệu riêng của từng máy (app đã ghim, bản sao lưu)
+pinned.json
+launcher.state.json
+*.bak-*
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,54 @@
+{
+  "browser": "chrome",
+  "browserArgs": [],
+  "appWindowMode": "maximized",
+  "minimizeOnLaunch": true,
+  "volumeStep": 2,
+  "saverBrightness": 40,
+  "autoCleanOnStart": false,
+  "autoKeyboard": true,
+  "wallpaper": "",
+  "claudeUrl": "https://claude.ai/new?q={q}",
+  "navBar": { "enabled": true, "position": "right", "opacity": 0.6 },
+  "pip": { "position": "bottom-right", "match": "(^|[-–] )YouTube$", "cropTop": 89, "widthPercent": 36 },
+
+  "home": ["Nghe nhạc", "YouTube", "Lướt web", "Telegram", "Facebook", "TikTok", "Gmail", "Lịch", "Xem TV", "Claude", "Gemini", "Shopee"],
+  "dock": ["Nghe nhạc", "YouTube", "Lướt web", "Telegram", "Claude"],
+
+  "tiles": [
+    { "group": "Âm nhạc & Video", "name": "Nghe nhạc",  "icon": "E8D6", "color": "#FF375F", "type": "app", "target": "https://music.youtube.com", "match": "YouTube Music" },
+    { "group": "Âm nhạc & Video", "name": "YouTube",    "icon": "E768", "color": "#FF3B30", "type": "app", "target": "https://www.youtube.com", "match": "(^|[-–] )YouTube$" },
+    { "group": "Âm nhạc & Video", "name": "NhacCuaTui", "icon": "E8D6", "color": "#1FA2E8", "type": "app", "target": "https://www.nhaccuatui.com", "match": "(?i)NhacCuaTui|NCT" },
+    { "group": "Âm nhạc & Video", "name": "Xem TV",     "icon": "E7F4", "color": "#0A5FB4", "type": "app", "target": "https://vtvgo.vn", "match": "VTV ?[Gg]o" },
+
+    { "group": "Mạng xã hội", "name": "Telegram", "icon": "E724", "color": "#2AABEE", "type": "app", "target": "https://web.telegram.org/a/", "match": "Telegram" },
+    { "group": "Mạng xã hội", "name": "Facebook", "icon": "f",    "color": "#1877F2", "type": "app", "target": "https://www.facebook.com", "match": "Facebook" },
+    { "group": "Mạng xã hội", "name": "TikTok",   "icon": "♪",    "color": "#161618", "fg": "#FE2C55", "type": "app", "target": "https://www.tiktok.com", "match": "TikTok" },
+    { "group": "Mạng xã hội", "name": "Threads",  "icon": "@",    "color": "#161618", "type": "app", "target": "https://www.threads.com", "match": "Threads" },
+    { "group": "Mạng xã hội", "name": "X",        "icon": "X",    "color": "#161618", "type": "app", "target": "https://x.com/home", "match": "(^|/ )X$" },
+
+    { "group": "Tiện ích", "name": "Lướt web", "icon": "E774", "color": "#0A84FF", "type": "web", "target": "https://www.google.com" },
+    { "group": "Tiện ích", "name": "Gmail",    "icon": "E715", "color": "#EA4335", "type": "app", "target": "https://mail.google.com", "match": "Gmail" },
+    { "group": "Tiện ích", "name": "Lịch",     "icon": "E787", "color": "#1A73E8", "type": "app", "target": "https://calendar.google.com", "match": "(?i)Google Calendar|Lịch Google" },
+    { "group": "Tiện ích", "name": "Keep",     "icon": "EA80", "color": "#F5B400", "type": "app", "target": "https://keep.google.com", "match": "(?i)Google Keep" },
+    { "group": "Tiện ích", "name": "Shopee",   "icon": "E7BF", "color": "#EE4D2D", "type": "app", "target": "https://shopee.vn", "match": "Shopee" },
+
+    { "group": "Trợ lý AI", "name": "Claude", "icon": "✳", "color": "#D97757", "type": "app", "target": "https://claude.ai/new", "match": "Claude" },
+    { "group": "Trợ lý AI", "name": "Gemini", "icon": "✦", "color": "#4E6CF5", "type": "app", "target": "https://gemini.google.com/app", "match": "Gemini" },
+
+    { "group": "Trò chơi", "name": "Poki",       "icon": "E7FC", "color": "#0A9BFF", "type": "app", "target": "https://poki.com/vi", "match": "Poki" },
+    { "group": "Trò chơi", "name": "CrazyGames", "icon": "E7FC", "color": "#6842FF", "type": "app", "target": "https://www.crazygames.com", "match": "CrazyGames" },
+    { "group": "Trò chơi", "name": "Cờ vua",     "icon": "♞",    "color": "#8B5E3C", "type": "app", "target": "https://lichess.org", "match": "(?i)lichess" }
+  ],
+  "killList": [
+    "OneDrive", "Teams", "ms-teams", "Skype", "PhoneExperienceHost", "YourPhone", "CrossDeviceResume",
+    "Widgets", "WidgetService", "GameBar", "GameBarFTServer", "XboxPcApp", "Copilot",
+    "Discord", "Steam", "steamwebhelper", "EpicGamesLauncher", "EADesktop", "Battle.net",
+    "Zoom", "Dropbox", "GoogleDriveFS",
+    "AdobeARM", "CCXProcess", "Creative Cloud", "Adobe Desktop Service", "AdobeIPCBroker", "CoreSync"
+  ],
+
+  "killListOptional": [
+    "Zalo", "Telegram", "Messenger", "Slack", "Notion", "Spotify", "msedge", "WINWORD", "EXCEL", "POWERPNT"
+  ]
+}
