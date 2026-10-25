@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="vi" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Windows Tablet Launcher</title>
+<meta name="description" content="Biến laptop / máy tính bảng Windows cảm ứng thành iPad: màn hình chính, Dock, Thư viện ứng dụng, Trung tâm điều khiển, PiP YouTube, lịch âm, tiết kiệm pin và MCP cho Claude. Miễn phí, mã nguồn mở.">
+<meta property="og:title" content="Windows Tablet Launcher">
+<meta property="og:description" content="Launcher kiểu iPad cho máy Windows cảm ứng — miễn phí, mã nguồn mở, không cần cài đặt.">
+<meta property="og:image" content="https://npduylab.github.io/windows-tablet-launcher/screenshots/home.png">
+<meta property="og:url" content="https://npduylab.github.io/windows-tablet-launcher/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%235E5CE6'/%3E%3Crect x='14' y='14' width='15' height='15' rx='4' fill='white'/%3E%3Crect x='35' y='14' width='15' height='15' rx='4' fill='white' opacity='.7'/%3E%3Crect x='14' y='35' width='15' height='15' rx='4' fill='white' opacity='.7'/%3E%3Crect x='35' y='35' width='15' height='15' rx='4' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b0b12;
+    --bg-2: #14142a;
+    --card: rgba(255, 255, 255, .06);
+    --card-border: rgba(255, 255, 255, .10);
+    --text: #f5f5f7;
+    --muted: #a1a1aa;
+    --accent: #5e5ce6;
+    --accent-2: #0a84ff;
+    --claude: #d97757;
+    --radius: 22px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 700px at 15% -10%, #23306b 0%, transparent 60%),
+                radial-gradient(900px 600px at 95% 10%, #3a1c6b 0%, transparent 55%),
+                var(--bg);
+    color: var(--text);
+    font: 17px/1.6 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  html[data-lang="vi"] [lang="en"], html[data-lang="en"] [lang="vi"] { display: none !important; }
+  a { color: inherit; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 16px; }
+
+  /* Thanh trên cùng */
+  .top { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+         background: rgba(11, 11, 18, .72); border-bottom: 1px solid var(--card-border); }
+  .top .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; }
+  .brand i { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; font-style: normal; }
+  .top nav { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .top nav a { text-decoration: none; color: var(--muted); padding: 6px 10px; border-radius: 10px; font-size: 15px; }
+  .top nav a:hover { color: var(--text); background: var(--card); }
+  .lang { border: 1px solid var(--card-border); background: var(--card); color: var(--text); border-radius: 10px;
+          padding: 6px 10px; font: inherit; font-size: 14px; cursor: pointer; }
+
+  /* Hero */
+  .hero { padding: 72px 0 40px; text-align: center; }
+  .badge { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--card-border);
+           color: var(--muted); font-size: 14px; margin-bottom: 22px; }
+  h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.08; margin: 0 0 18px; letter-spacing: -0.02em; }
+  h1 span.grad { background: linear-gradient(90deg, #8ab4ff, #b48cff 55%, #ff8fb1); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { color: var(--muted); font-size: clamp(17px, 2.2vw, 21px); max-width: 760px; margin: 0 auto 32px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 16px; text-decoration: none;
+         font-weight: 600; border: 1px solid var(--card-border); background: var(--card); transition: transform .15s ease, background .15s; }
+  .btn:hover { transform: translateY(-2px); background: rgba(255,255,255,.1); }
+  .btn.primary { background: linear-gradient(180deg, #6f6dff, var(--accent)); border-color: transparent; box-shadow: 0 10px 30px rgba(94, 92, 230, .35); }
+  .btn svg { width: 20px; height: 20px; }
+  .note { color: var(--muted); font-size: 14px; margin-top: 14px; }
+
+  .shot { margin: 48px auto 0; border-radius: 26px; overflow: hidden; border: 1px solid var(--card-border);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, .55), 0 0 0 10px rgba(255,255,255,.03); max-width: 1080px; }
+  .shot img { display: block; width: 100%; height: auto; }
+
+  section { padding: 72px 0 8px; }
+  h2 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 12px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 32px; max-width: 760px; }
+
+  /* Tính năng */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 22px; }
+  .card .ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+  /* Bộ ảnh */
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .gallery figure { margin: 0; }
+  .gallery img { width: 100%; border-radius: 16px; border: 1px solid var(--card-border); display: block; cursor: zoom-in; }
+  .gallery figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; text-align: center; }
+
+  /* Các bước */
+  .steps { counter-reset: s; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .step { position: relative; padding-left: 64px; }
+  .step::before { counter-increment: s; content: counter(s); position: absolute; left: 22px; top: 22px; width: 30px; height: 30px; border-radius: 50%;
+                  background: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+  code { font-family: "Cascadia Code", Consolas, ui-monospace, monospace; font-size: .9em; background: rgba(255,255,255,.08);
+         padding: 2px 6px; border-radius: 6px; }
+  pre { background: #07070c; border: 1px solid var(--card-border); border-radius: 16px; padding: 16px 18px; overflow-x: auto; margin: 12px 0 0; }
+  pre code { background: none; padding: 0; font-size: 14px; line-height: 1.55; }
+
+  /* Claude */
+  .claude { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; align-items: start; }
+  .chat { display: grid; gap: 10px; }
+  .bubble { padding: 12px 16px; border-radius: 18px; max-width: 92%; font-size: 15.5px; }
+  .bubble.me { background: var(--accent-2); justify-self: end; border-bottom-right-radius: 6px; }
+  .bubble.ai { background: var(--card); border: 1px solid var(--card-border); border-bottom-left-radius: 6px; }
+  .bubble.ai b { color: var(--claude); }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .tools code { background: rgba(217, 119, 87, .15); color: #f2b49b; }
+
+  details { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 14px 18px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--muted); margin: 10px 0 0; }
+
+  footer { margin-top: 80px; padding: 32px 0 48px; border-top: 1px solid var(--card-border); color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+
+  /* Xem ảnh lớn */
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; place-items: center; z-index: 50; padding: 16px; cursor: zoom-out; }
+  .lightbox.open { display: grid; }
+  .lightbox img { max-width: 100%; max-height: 100%; border-radius: 14px; }
+
+  @media (max-width: 860px) {
+    .gallery { grid-template-columns: 1fr; }
+    .claude { grid-template-columns: 1fr; }
+    .top nav a.hide-sm { display: none; }
+    .hero { padding-top: 48px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><i>▦</i> Windows Tablet Launcher</a>
+    <nav>
+      <a class="hide-sm" href="#features"><span lang="vi">Tính năng</span><span lang="en">Features</span></a>
+      <a class="hide-sm" href="#install"><span lang="vi">Cài đặt</span><span lang="en">Install</span></a>
+      <a class="hide-sm" href="#claude">Claude</a>
+      <a href="https://github.com/npduylab/windows-tablet-launcher">GitHub</a>
+      <button class="lang" id="lang" type="button" aria-label="Đổi ngôn ngữ / Switch language">EN</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="badge">
+      <span lang="vi">Miễn phí · Mã nguồn mở · Không cần cài đặt</span>
+      <span lang="en">Free · Open source · Nothing to install</span>
+    </div>
+    <h1>
+      <span lang="vi">Biến máy Windows cảm ứng<br>thành <span class="grad">máy tính bảng</span></span>
+      <span lang="en">Turn your Windows touch PC<br>into a <span class="grad">tablet</span></span>
+    </h1>
+    <p class="lead">
+      <span lang="vi">Màn hình chính kiểu iPad, Dock, Thư viện ứng dụng, Trung tâm điều khiển, đa nhiệm, PiP YouTube, lịch âm, tiết kiệm pin — và để <b>Claude</b> điều khiển máy bằng lời nói thường ngày.</span>
+      <span lang="en">An iPad-style home screen, Dock, App Library, Control Center, multitasking, YouTube picture-in-picture, battery saving — and let <b>Claude</b> drive your device in plain language.</span>
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span lang="vi">Tải về (ZIP)</span><span lang="en">Download (ZIP)</span>
+      </a>
+      <a class="btn" href="https://github.com/npduylab/windows-tablet-launcher">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.29-1.69-1.29-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        <span lang="vi">Xem mã nguồn</span><span lang="en">View source</span>
+      </a>
+    </div>
+    <p class="note">
+      <span lang="vi">Windows 10 / 11 · Chạy bằng PowerShell + WPF có sẵn · Giấy phép MIT</span>
+      <span lang="en">Windows 10 / 11 · Runs on built-in PowerShell + WPF · MIT license</span>
+    </p>
+    <div class="shot">
+      <img src="screenshots/home.png" width="1920" height="1280"
+           alt="Màn hình chính: đồng hồ, pin, lịch âm, icon ứng dụng, Dock và thanh điều hướng — Home screen">
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2><span lang="vi">Mọi thứ của một chiếc máy tính bảng</span><span lang="en">Everything a tablet should have</span></h2>
+      <p class="sub">
+        <span lang="vi">Tối ưu cho cảm ứng: nút lớn, vuốt, nhấn giữ — và nhẹ nhàng với pin.</span>
+        <span lang="en">Built for touch — big targets, swipes, press-and-hold — and gentle on the battery.</span>
+      </p>
+      <div class="grid">
+        <div class="card"><div class="ic" style="background:#5e5ce6">▦</div>
+          <h3><span lang="vi">Màn hình chính & Dock</span><span lang="en">Home screen & Dock</span></h3>
+          <p><span lang="vi">Widget đồng hồ, pin và lịch tháng có âm lịch. Dock với app yêu thích và app vừa dùng.</span>
+             <span lang="en">Clock, battery and month-calendar widgets (with the Vietnamese lunar calendar). A Dock with favorites and recent apps.</span></p></div>
+        <div class="card"><div class="ic" style="background:#0a84ff">⊞</div>
+          <h3><span lang="vi">Thư viện ứng dụng</span><span lang="en">App Library</span></h3>
+          <p><span lang="vi">Web app chia nhóm. Vuốt sang trái để mở, nhấn giữ để ghim ra trang chủ.</span>
+             <span lang="en">Web apps grouped by category. Swipe left to open, press and hold to pin to home.</span></p></div>
+        <div class="card"><div class="ic" style="background:#30d158">◐</div>
+          <h3><span lang="vi">Trung tâm điều khiển</span><span lang="en">Control Center</span></h3>
+          <p><span lang="vi">Nhạc, âm lượng, độ sáng, tiết kiệm pin, bàn phím, tắt màn hình — nổi trên mọi app.</span>
+             <span lang="en">Media, volume, brightness, battery saver, keyboard, screen off — floating over any app.</span></p></div>
+        <div class="card"><div class="ic" style="background:#ff9f0a">❐</div>
+          <h3><span lang="vi">Đa nhiệm mượt</span><span lang="en">Smooth multitasking</span></h3>
+          <p><span lang="vi">Thanh điều hướng nổi (Quay lại · Home · Đa nhiệm) và thẻ xem trước trực tiếp từng cửa sổ.</span>
+             <span lang="en">A floating nav bar (Back · Home · Recents) and live preview cards for every window.</span></p></div>
+        <div class="card"><div class="ic" style="background:#ff3b30">▶</div>
+          <h3><span lang="vi">PiP YouTube</span><span lang="en">YouTube PiP</span></h3>
+          <p><span lang="vi">Thu video thành khung nổi bo góc ở góc màn hình, vừa xem vừa làm việc khác.</span>
+             <span lang="en">Shrink a video into a rounded floating player in the corner while you do other things.</span></p></div>
+        <div class="card"><div class="ic" style="background:#64d2ff">⌨</div>
+          <h3><span lang="vi">Bàn phím cảm ứng</span><span lang="en">Touch keyboard</span></h3>
+          <p><span lang="vi">Tự bật khi chạm ô nhập chữ — cứu cánh khi bàn phím vật lý bị hỏng.</span>
+             <span lang="en">Pops up automatically in text fields — a lifesaver when the physical keyboard is broken.</span></p></div>
+        <div class="card"><div class="ic" style="background:#ffd60a;color:#1c1c1e">⚡</div>
+          <h3><span lang="vi">Tiết kiệm pin</span><span lang="en">Battery saving</span></h3>
+          <p><span lang="vi">Chế độ hiệu suất năng lượng cao nhất, dọn app nền thừa; launcher tự chạy EcoQoS.</span>
+             <span lang="en">Best-efficiency power mode, background app cleanup; the launcher itself runs under EcoQoS.</span></p></div>
+        <div class="card"><div class="ic" style="background:#d97757">✳</div>
+          <h3><span lang="vi">Tìm kiếm & Claude</span><span lang="en">Search & Claude</span></h3>
+          <p><span lang="vi">Tìm app, hỏi Claude, tìm Google / YouTube ngay trên trang chủ. Có MCP để Claude điều khiển máy.</span>
+             <span lang="en">Find apps, ask Claude, search Google / YouTube from the home screen. Plus an MCP server for Claude.</span></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="gallery">
+    <div class="wrap">
+      <h2><span lang="vi">Ảnh chụp thật</span><span lang="en">Real screenshots</span></h2>
+      <p class="sub"><span lang="vi">Chạm vào ảnh để xem lớn.</span><span lang="en">Tap an image to enlarge.</span></p>
+      <div class="gallery">
+        <figure><img src="screenshots/library.png" alt="Thư viện ứng dụng — App Library" loading="lazy">
+          <figcaption><span lang="vi">Thư viện ứng dụng</span><span lang="en">App Library</span></figcaption></figure>
+        <figure><img src="screenshots/control-center.png" alt="Trung tâm điều khiển — Control Center" loading="lazy">
+          <figcaption><span lang="vi">Trung tâm điều khiển</span><span lang="en">Control Center</span></figcaption></figure>
+        <figure><img src="screenshots/search.png" alt="Tìm kiếm và Hỏi Claude — Search and Ask Claude" loading="lazy">
+          <figcaption><span lang="vi">Tìm kiếm & Hỏi Claude</span><span lang="en">Search & Ask Claude</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2><span lang="vi">Bắt đầu trong 1 phút</span><span lang="en">Up and running in a minute</span></h2>
+      <p class="sub"><span lang="vi">Không cần quyền admin, không cài thêm phần mềm.</span><span lang="en">No admin rights, no extra software.</span></p>
+      <div class="steps">
+        <div class="card step">
+          <h3><span lang="vi">Tải về</span><span lang="en">Download</span></h3>
+          <p><span lang="vi">Bấm <b>Tải về (ZIP)</b> ở trên rồi giải nén vào một thư mục, ví dụ <code>Documents\Launcher</code>.</span>
+             <span lang="en">Click <b>Download (ZIP)</b> above and extract it to a folder, e.g. <code>Documents\Launcher</code>.</span></p>
+        </div>
+        <div class="card step">
+          <h3><span lang="vi">Chạy</span><span lang="en">Run</span></h3>
+          <p><span lang="vi">Bấm đúp <code>ChayLauncher.cmd</code>. Launcher mở toàn màn hình.</span>
+             <span lang="en">Double-click <code>ChayLauncher.cmd</code>. The launcher opens full-screen.</span></p>
+        </div>
+        <div class="card step">
+          <h3><span lang="vi">Tự chạy khi mở máy</span><span lang="en">Start with Windows</span></h3>
+          <p><span lang="vi">Tạo shortcut ngoài Desktop và tự chạy khi đăng nhập:</span>
+             <span lang="en">Add a desktop shortcut and start on sign-in:</span></p>
+          <pre><code>powershell -ExecutionPolicy Bypass -File CaiDat.ps1 -AutoStart</code></pre>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3><span lang="vi">Tuỳ chỉnh app trong <code>launcher.config.json</code></span><span lang="en">Customize apps in <code>launcher.config.json</code></span></h3>
+        <p style="color:var(--muted);margin:0">
+          <span lang="vi">Thêm bất kỳ trang web nào thành một app riêng, toàn màn hình:</span>
+          <span lang="en">Turn any website into a standalone, full-screen app:</span>
+        </p>
+<pre><code>{ "group": "Tiện ích", "name": "Zalo", "icon": "Z", "color": "#0068FF",
+  "type": "app", "target": "https://chat.zalo.me", "match": "Zalo" }</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="claude">
+    <div class="wrap claude">
+      <div>
+        <h2><span lang="vi">Để Claude điều khiển máy</span><span lang="en">Let Claude drive your tablet</span></h2>
+        <p class="sub" style="margin-bottom:16px">
+          <span lang="vi">Dự án kèm một MCP server (Python thuần, không cần <code>pip</code>). Đăng ký với Claude Desktop bằng một lệnh, rồi chỉ việc nói.</span>
+          <span lang="en">The project ships an MCP server (pure Python, no <code>pip</code>). Register it with Claude Desktop in one command, then just ask.</span>
+        </p>
+        <pre><code>powershell -ExecutionPolicy Bypass -File CaiMCP.ps1</code></pre>
+        <div class="tools">
+          <code>open_app</code><code>search</code><code>media</code><code>set_brightness</code><code>get_status</code>
+          <code>switch_window</code><code>close_window</code><code>go_home</code><code>open_notifications</code>
+        </div>
+      </div>
+      <div class="card chat">
+        <div class="bubble me"><span lang="vi">Mở YouTube tìm nhạc Trịnh Công Sơn</span><span lang="en">Open YouTube and find some lo-fi music</span></div>
+        <div class="bubble ai"><b>Claude</b> · <span lang="vi">Đã mở kết quả tìm "nhạc Trịnh Công Sơn" trên YouTube.</span><span lang="en">Opened YouTube results for "lo-fi music".</span></div>
+        <div class="bubble me"><span lang="vi">Tăng âm lượng một chút, pin còn bao nhiêu?</span><span lang="en">Turn it up a bit — how much battery is left?</span></div>
+        <div class="bubble ai"><b>Claude</b> · <span lang="vi">Đã tăng âm lượng. Pin 87%, còn khoảng 5 giờ 40 phút.</span><span lang="en">Volume up. Battery is at 87%, about 5 h 40 min left.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2><span lang="vi">Câu hỏi thường gặp</span><span lang="en">FAQ</span></h2>
+      <details>
+        <summary><span lang="vi">Có an toàn không? Có gửi dữ liệu đi đâu không?</span><span lang="en">Is it safe? Does it send data anywhere?</span></summary>
+        <p><span lang="vi">Không. Launcher không có máy chủ, không thu thập dữ liệu. Mọi thứ chạy trên máy bạn và mã nguồn công khai để ai cũng kiểm tra được.</span>
+           <span lang="en">No. There is no server and no telemetry. Everything runs locally, and the source is public for anyone to audit.</span></p>
+      </details>
+      <details>
+        <summary><span lang="vi">Windows báo chặn script PowerShell?</span><span lang="en">Windows blocks the PowerShell script?</span></summary>
+        <p><span lang="vi">Hãy chạy bằng <code>ChayLauncher.cmd</code> — tệp này tự dùng <code>-ExecutionPolicy Bypass</code> cho riêng launcher, không đổi cài đặt bảo mật của máy. Nếu tải ZIP, có thể bấm chuột phải tệp ZIP → Properties → Unblock trước khi giải nén.</span>
+           <span lang="en">Start it with <code>ChayLauncher.cmd</code>, which uses <code>-ExecutionPolicy Bypass</code> for the launcher only and leaves system settings alone. For the ZIP, you can right-click it → Properties → Unblock before extracting.</span></p>
+      </details>
+      <details>
+        <summary><span lang="vi">Dùng trình duyệt nào?</span><span lang="en">Which browser does it use?</span></summary>
+        <p><span lang="vi">Mặc định là Google Chrome (để đồng bộ tài khoản Google). Đổi sang Edge bằng <code>"browser": "edge"</code> trong cấu hình.</span>
+           <span lang="en">Google Chrome by default (for Google account sync). Switch to Edge with <code>"browser": "edge"</code> in the config.</span></p>
+      </details>
+      <details>
+        <summary><span lang="vi">Thoát launcher thế nào?</span><span lang="en">How do I quit the launcher?</span></summary>
+        <p><span lang="vi">Mở Trung tâm điều khiển → Nguồn → Thoát launcher. Ở đó cũng có Tắt máy, Khởi động lại và Ngủ.</span>
+           <span lang="en">Open Control Center → Power → Exit launcher. Shut down, Restart and Sleep live there too.</span></p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Nguyễn Phúc Duy (<a href="https://github.com/npduylab">npduylab</a>) · <span lang="vi">Giấy phép</span><span lang="en">License</span> <a href="https://github.com/npduylab/windows-tablet-launcher/blob/main/LICENSE">MIT</a></span>
+    <span><a href="https://github.com/npduylab/windows-tablet-launcher/issues"><span lang="vi">Báo lỗi / góp ý</span><span lang="en">Report an issue</span></a></span>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-label="Ảnh lớn"><img alt=""></div>
+
+<script>
+  // Ngôn ngữ: theo lựa chọn đã lưu, nếu chưa có thì theo trình duyệt.
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('lang'), saved = null;
+    try { saved = localStorage.getItem('twl-lang'); } catch (e) {}
+    var lang = saved || ((navigator.language || 'vi').toLowerCase().indexOf('vi') === 0 ? 'vi' : 'en');
+    function apply(l) {
+      root.setAttribute('data-lang', l); root.setAttribute('lang', l);
+      btn.textContent = l === 'vi' ? 'EN' : 'VI';
+      try { localStorage.setItem('twl-lang', l); } catch (e) {}
+    }
+    apply(lang);
+    btn.addEventListener('click', function () { apply(root.getAttribute('data-lang') === 'vi' ? 'en' : 'vi'); });
+
+    // Xem ảnh lớn
+    var box = document.getElementById('lightbox'), big = box.querySelector('img');
+    document.querySelectorAll('.gallery img, .shot img').forEach(function (img) {
+      img.addEventListener('click', function () { big.src = img.src; big.alt = img.alt; box.classList.add('open'); });
+    });
+    box.addEventListener('click', function () { box.classList.remove('open'); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') box.classList.remove('open'); });
+  })();
+</script>
+</body>
+</html>
