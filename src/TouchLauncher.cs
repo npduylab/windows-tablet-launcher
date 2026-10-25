@@ -47,8 +47,16 @@ static class Program
     static string PrepareScript()
     {
         string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+        // Cho script biết exe ở đâu và là bản nào (dùng cho tự cập nhật).
+        var asm = Assembly.GetExecutingAssembly();
+        var info = (AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(asm, typeof(AssemblyInformationalVersionAttribute));
+        Environment.SetEnvironmentVariable("TOUCHLAUNCHER_EXE", asm.Location);
+        Environment.SetEnvironmentVariable("TOUCHLAUNCHER_VERSION", info != null ? info.InformationalVersion : asm.GetName().Version.ToString(3));
+
         string beside = Path.Combine(exeDir, "Launcher.ps1");
-        if (File.Exists(beside)) return beside;
+        if (File.Exists(beside)) return beside;   // chạy cạnh mã nguồn: không tự cập nhật
+
+        Environment.SetEnvironmentVariable("TOUCHLAUNCHER_STANDALONE", "1");
 
         string appDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TouchLauncher", "app");

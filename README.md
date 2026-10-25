@@ -33,6 +33,12 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 | Tìm kiếm | Tìm app, **Hỏi Claude**, tìm Google / YouTube |
 | Tiết kiệm pin | Chế độ "Best power efficiency" + Energy Saver; launcher chạy EcoQoS, ưu tiên thấp, trả RAM khi ở nền |
 | Dọn tiến trình | Đóng app nền thừa (OneDrive, Teams, Widgets…) kèm dung lượng RAM |
+| Đang phát | Widget ảnh bìa, tên bài, nút điều khiển — lấy từ bộ điều khiển media của Windows (YouTube Music, NhacCuaTui, Spotify…) |
+| Hẹn giờ tắt nhạc | Trung tâm điều khiển → Hẹn giờ tắt: 15 / 30 / 60 phút → dừng nhạc và tắt màn hình |
+| Thêm app bằng địa chỉ | Thư viện → **+ Thêm app**: dán link, tự lấy tên và icon thật của trang; lưu ở `apps.user.json` |
+| Chia đôi màn hình | Đa nhiệm → **Chia đôi** (hoặc Trung tâm điều khiển): 2 app gần nhất cạnh nhau, kéo thanh giữa để đổi tỉ lệ |
+| Đồng hồ đầu giường | Đang sạc + không chạm 5 phút (hoặc bật tay): đồng hồ lớn, lịch âm, ảnh trong Pictures chạy lần lượt |
+| Tự cập nhật | Bản .exe tự kiểm tra bản mới trên GitHub (tối đa 1 lần/ngày), bấm **Cập nhật** là xong |
 
 ### Yêu cầu
 - Windows 10 / 11 (tối ưu cho màn hình cảm ứng)
@@ -64,6 +70,8 @@ Kết quả nằm ở `dist\TouchLauncher.exe`. Nếu chép exe vào cạnh `Lau
 - `navBar.position`: `right` / `left` / `bottom`. `pip.position`: `bottom-right` / `bottom-left` / `top-right` / `top-left`.
 - `autoKeyboard`: tự hiện bàn phím cảm ứng. `killList` / `killListOptional`: tiến trình cần dọn.
 - `wallpaper`: đường dẫn ảnh nền. `claudeUrl`: địa chỉ "Hỏi Claude".
+- `photoFolder`: thư mục ảnh cho đồng hồ đầu giường (mặc định: Pictures). `nightClock.auto` / `nightClock.idleMinutes`: tự bật khi đang sạc và không dùng N phút.
+- `updateCheck`: `false` để tắt tự kiểm tra bản mới.
 
 ### Claude điều khiển máy (MCP)
 `mcp/touch_launcher_mcp.py` là MCP server dùng thư viện chuẩn Python (không cần `pip`). Công cụ: `list_apps`, `open_app`, `search` (Google/YouTube/YouTube Music/Maps/Shopee), `open_url`, `media` (phát/dừng, bài, âm lượng), `set_brightness`, `get_status` (pin, giờ, cửa sổ), `list_windows`, `switch_window`, `close_window`, `go_home`, `open_notifications`.

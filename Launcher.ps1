@@ -123,6 +123,17 @@ namespace TouchLauncher {
         [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
         [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] public static extern bool LockWorkStation();
+        [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+        [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+        [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint flags);
+        // Số giây kể từ lần chạm / bấm phím cuối cùng.
+        public static uint IdleSeconds() {
+            LASTINPUTINFO l = new LASTINPUTINFO(); l.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+            if (!GetLastInputInfo(ref l)) return 0;
+            return unchecked((uint)Environment.TickCount - l.dwTime) / 1000;
+        }
+        // Giữ màn hình sáng (chế độ đồng hồ đầu giường); false = trả lại cho Windows quản lý.
+        public static void KeepDisplayOn(bool on) { SetThreadExecutionState(on ? 0x80000003u : 0x80000000u); }
         [DllImport("user32.dll")] static extern IntPtr GetDesktopWindow();
         [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
         [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
@@ -327,6 +338,22 @@ try {
     exit 1
 }
 $Utf8NoBom = New-Object Text.UTF8Encoding $false
+
+# App người dùng tự thêm (nút "+ Thêm app"): lưu riêng để cập nhật launcher không làm mất.
+$userAppsPath = Join-Path $PSScriptRoot 'apps.user.json'
+$IconDir      = Join-Path $PSScriptRoot 'icons'
+$userApps = @()
+if (Test-Path $userAppsPath) {
+    try { $userApps = @((Get-Content $userAppsPath -Raw -Encoding UTF8 | ConvertFrom-Json) | Where-Object { $_.name -and $_.target }) } catch {}
+}
+foreach ($u in $userApps) { $u | Add-Member -NotePropertyName user -NotePropertyValue $true -Force }
+$cfg.tiles = @(@($cfg.tiles) + $userApps)
+function Save-UserApps {
+    $list = @($cfg.tiles | Where-Object { $_.user } | ForEach-Object {
+        [pscustomobject]@{ group = $_.group; name = $_.name; icon = $_.icon; iconImage = $_.iconImage; color = $_.color
+                           type = $_.type; target = $_.target; match = $_.match } })
+    [IO.File]::WriteAllText($userAppsPath, (ConvertTo-Json -InputObject $list -Depth 4), $Utf8NoBom)
+}
 
 # Trang chủ = các app được ghim (theo tên, đúng thứ tự). Chưa có pinned.json thì lấy "home" trong cấu hình.
 $script:Pins = $null
@@ -545,6 +572,34 @@ $xaml = @'
                 </DockPanel>
               </StackPanel>
             </Border>
+            <!-- Đang phát (ẩn khi không có nhạc/video) -->
+            <Border x:Name="NowCard" Visibility="Collapsed" Background="#26FFFFFF" CornerRadius="30" Padding="16" Margin="0,0,0,16"
+                    BorderBrush="#1FFFFFFF" BorderThickness="1">
+              <DockPanel>
+                <Grid DockPanel.Dock="Left" Width="80" Height="80">
+                  <Border CornerRadius="18" Background="#33FFFFFF">
+                    <TextBlock Style="{StaticResource Icon}" FontSize="30" Text="&#xE8D6;" Foreground="#99FFFFFF"/>
+                  </Border>
+                  <Image x:Name="NowArt" Stretch="UniformToFill"/>
+                </Grid>
+                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                  <TextBlock x:Name="NowSource" FontSize="12" Foreground="#99FFFFFF" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock x:Name="NowTitle" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock x:Name="NowArtist" FontSize="13" Foreground="#BBFFFFFF" TextTrimming="CharacterEllipsis"/>
+                  <StackPanel Orientation="Horizontal" Margin="-10,2,0,0">
+                    <Button x:Name="BtnNowPrev" Style="{StaticResource Plain}" Width="52" Height="44">
+                      <TextBlock Style="{StaticResource Icon}" FontSize="20" Text="&#xE892;"/>
+                    </Button>
+                    <Button x:Name="BtnNowPlay" Style="{StaticResource Plain}" Width="52" Height="44">
+                      <TextBlock x:Name="NowPlayIcon" Style="{StaticResource Icon}" FontSize="24" Text="&#xE768;"/>
+                    </Button>
+                    <Button x:Name="BtnNowNext" Style="{StaticResource Plain}" Width="52" Height="44">
+                      <TextBlock Style="{StaticResource Icon}" FontSize="20" Text="&#xE893;"/>
+                    </Button>
+                  </StackPanel>
+                </StackPanel>
+              </DockPanel>
+            </Border>
             <Border Background="#26FFFFFF" CornerRadius="30" Padding="16,14" Margin="0,0,0,16" BorderBrush="#1FFFFFFF" BorderThickness="1">
               <StackPanel>
                 <DockPanel Margin="6,0,0,6">
@@ -613,6 +668,12 @@ $xaml = @'
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
           <TextBlock DockPanel.Dock="Left" Text="Thư viện ứng dụng" FontSize="36" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0"/>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button x:Name="BtnAddApp" Style="{StaticResource Glass}" Background="#B30A84FF">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" Margin="0,0,10,0"/>
+                <TextBlock Text="Thêm app" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
             <Button x:Name="BtnPinMode" Style="{StaticResource Glass}">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Style="{StaticResource Icon}" Text="&#xE718;" Margin="0,0,12,0"/>
@@ -643,6 +704,12 @@ $xaml = @'
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16" LastChildFill="False">
           <TextBlock DockPanel.Dock="Left" Text="Đa nhiệm" FontSize="36" FontWeight="SemiBold" VerticalAlignment="Center"/>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button x:Name="BtnSplit" Style="{StaticResource Glass}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE90C;" Margin="0,0,12,0"/>
+                <TextBlock Text="Chia đôi 2 app gần nhất" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
             <Button x:Name="BtnCloseAllWin" Style="{StaticResource Glass}">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" Margin="0,0,12,0"/>
@@ -722,6 +789,72 @@ $xaml = @'
       </Border>
     </Grid>
 
+    <!-- Thêm app web -->
+    <Grid x:Name="AddOverlay" Background="#CC000000" Visibility="Collapsed">
+      <Border Background="#F21C1C1E" CornerRadius="30" Padding="30" MaxWidth="680" Margin="24"
+              BorderBrush="#3A3A3C" BorderThickness="1" VerticalAlignment="Center">
+        <StackPanel>
+          <TextBlock Text="Thêm app web" FontSize="30" FontWeight="SemiBold"/>
+          <TextBlock Text="Dán địa chỉ trang web. Launcher tự lấy tên và icon của trang." FontSize="16" Foreground="#8E8E93"
+                     TextWrapping="Wrap" Margin="0,6,0,18"/>
+          <TextBlock Text="Địa chỉ" FontSize="15" Foreground="#AEAEB2" Margin="4,0,0,6"/>
+          <TextBox x:Name="AddUrl" FontSize="20" Height="56" Padding="16,0" VerticalContentAlignment="Center"
+                   Background="#2C2C2E" Foreground="#FFFFFF" CaretBrush="#FFFFFF" BorderBrush="#3A3A3C" BorderThickness="2"/>
+          <TextBlock Text="Tên app" FontSize="15" Foreground="#AEAEB2" Margin="4,14,0,6"/>
+          <TextBox x:Name="AddName" FontSize="20" Height="56" Padding="16,0" VerticalContentAlignment="Center"
+                   Background="#2C2C2E" Foreground="#FFFFFF" CaretBrush="#FFFFFF" BorderBrush="#3A3A3C" BorderThickness="2"/>
+          <TextBlock Text="Nhóm" FontSize="15" Foreground="#AEAEB2" Margin="4,14,0,6"/>
+          <WrapPanel x:Name="AddGroups"/>
+          <DockPanel Margin="0,16,0,0">
+            <Border x:Name="AddPreview" DockPanel.Dock="Left" Width="72" Height="72" CornerRadius="17" Background="#3A3A3C">
+              <Grid>
+                <TextBlock x:Name="AddLetter" FontSize="34" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Image x:Name="AddIcon" Width="50" Height="50"/>
+              </Grid>
+            </Border>
+            <TextBlock x:Name="AddStatus" FontSize="16" Foreground="#AEAEB2" TextWrapping="Wrap" VerticalAlignment="Center" Margin="16,0,0,0"
+                       Text="Nhập địa chỉ, ví dụ chat.zalo.me"/>
+          </DockPanel>
+          <WrapPanel HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="BtnAddCancel" Style="{StaticResource Glass}" Content="Hủy"/>
+            <Button x:Name="BtnAddSave" Style="{StaticResource Glass}" Background="#0A84FF" Content="Thêm vào Thư viện"/>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- Đồng hồ đầu giường / khung ảnh -->
+    <Grid x:Name="NightOverlay" Background="#000000" Visibility="Collapsed">
+      <Image x:Name="NightPhotoA" Stretch="UniformToFill" Opacity="0"/>
+      <Image x:Name="NightPhotoB" Stretch="UniformToFill" Opacity="0"/>
+      <Border>
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#33000000" Offset="0"/>
+            <GradientStop Color="#99000000" Offset="0.6"/>
+            <GradientStop Color="#DD000000" Offset="1"/>
+          </LinearGradientBrush>
+        </Border.Background>
+      </Border>
+      <StackPanel x:Name="NightClock" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="80,0,0,70">
+        <TextBlock x:Name="NightTime" FontSize="150" FontWeight="Light" Foreground="#E6FFFFFF"/>
+        <TextBlock x:Name="NightDate" FontSize="30" Foreground="#CCFFFFFF" Margin="6,-10,0,0"/>
+        <TextBlock x:Name="NightLunar" FontSize="22" Foreground="#99FFFFFF" Margin="6,4,0,0"/>
+        <TextBlock x:Name="NightInfo" FontSize="18" Foreground="#80FFFFFF" Margin="6,14,0,0"/>
+      </StackPanel>
+    </Grid>
+
+    <!-- Có bản mới -->
+    <Border x:Name="UpdateBar" Visibility="Collapsed" Background="#F21C1C1E" CornerRadius="22" Padding="20,10"
+            HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24,50,24,0" BorderBrush="#0A84FF" BorderThickness="1">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Style="{StaticResource Icon}" FontSize="22" Text="&#xE895;" Foreground="#64D2FF" Margin="0,0,14,0"/>
+        <TextBlock x:Name="UpdateText" FontSize="17" VerticalAlignment="Center" Margin="0,0,14,0"/>
+        <Button x:Name="BtnUpdateNow" Style="{StaticResource Glass}" Height="48" Background="#0A84FF" Content="Cập nhật"/>
+        <Button x:Name="BtnUpdateLater" Style="{StaticResource Glass}" Height="48" Content="Để sau"/>
+      </StackPanel>
+    </Border>
+
     <!-- Thông báo (banner trên cùng) -->
     <Border x:Name="Toast" Visibility="Collapsed" Background="#F22C2C2E" CornerRadius="22" Padding="26,14"
             HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24,54,24,0" IsHitTestVisible="False"
@@ -737,6 +870,10 @@ $ui = @{}
 foreach ($n in 'WallImage','MainArea','BtnStatus','BatteryText','BatteryIcon','StatusTime',
                'Widgets','Clock','DateText','BatteryBig','BatteryBar','BatteryNote',
                'TilePanel','DockFav','DockRecent','BtnNotify','LunarText',
+               'NowCard','NowArt','NowSource','NowTitle','NowArtist','BtnNowPrev','BtnNowPlay','BtnNowNext','NowPlayIcon',
+               'BtnAddApp','BtnSplit','AddOverlay','AddUrl','AddName','AddGroups','AddPreview','AddLetter','AddIcon','AddStatus','BtnAddCancel','BtnAddSave',
+               'NightOverlay','NightPhotoA','NightPhotoB','NightClock','NightTime','NightDate','NightLunar','NightInfo',
+               'UpdateBar','UpdateText','BtnUpdateNow','BtnUpdateLater',
                'BtnCalPrev','BtnCalNext','BtnCalTitle','CalTitle','CalHead','CalGrid',
                'Spot','SpotHint','BtnSpotClear','SpotResults','SpotList',
                'AppsOverlay','AppsDock','BtnPinMode','PinModeText','BtnKbd2','BtnCloseApps','Search','SearchHint','AppsHint','AppGrid',
@@ -858,12 +995,30 @@ function New-Glyph([string]$icon, [int]$px, [string]$fg, [bool]$allowGlyph) {
 function Get-Initial([string]$name) { if ($name) { $name.Substring(0, 1).ToUpper() } else { '?' } }
 
 # Icon bo góc kiểu iPad. $t.type: app/web/uri/exe (glyph), shellapp (icon thật), window (icon cửa sổ), letter (chữ cái).
+# Ảnh icon từ tệp (favicon của app tự thêm). Đường dẫn tương đối tính từ thư mục launcher.
+$script:ImgCache = @{}
+function Get-FileImage([string]$path) {
+    $p = if ([IO.Path]::IsPathRooted($path)) { $path } else { Join-Path $PSScriptRoot $path }
+    if ($script:ImgCache.ContainsKey($p)) { return $script:ImgCache[$p] }
+    $img = $null
+    if (Test-Path $p) {
+        try {
+            $img = New-Object System.Windows.Media.Imaging.BitmapImage
+            $img.BeginInit(); $img.UriSource = [Uri]$p; $img.DecodePixelWidth = 128
+            $img.CacheOption = 'OnLoad'; $img.CreateOptions = 'IgnoreImageCache'; $img.EndInit(); $img.Freeze()
+        } catch { $img = $null }
+    }
+    $script:ImgCache[$p] = $img
+    return $img
+}
+
 function New-Squircle($t, [int]$px) {
     $bd = New-Object System.Windows.Controls.Border
     $bd.Width = $px; $bd.Height = $px
     $bd.CornerRadius = New-Object System.Windows.CornerRadius ([math]::Round($px * 0.23))
     $glyphPx = [int]($px * 0.5)
     $src = $null
+    if ($t.iconImage) { $src = Get-FileImage ([string]$t.iconImage) }
     switch ($t.type) {
         'shellapp' { $src = Get-AppIcon $t.target }
         'window'   { $src = $t.iconSource }
@@ -1099,8 +1254,24 @@ function New-AppItem($t) {
     $pin.Visibility = if (Test-Pinned $t.name) { 'Visible' } else { 'Collapsed' }
     [void]$grid.Children.Add($pin)
 
+    # App tự thêm: nút xóa đỏ, chỉ hiện ở chế độ ghim/sửa.
+    $del = $null
+    if ($t.user) {
+        $del = New-Object System.Windows.Controls.Button
+        $del.Style = $win.FindResource('Plain')
+        $del.Width = 40; $del.Height = 40; $del.HorizontalAlignment = 'Left'; $del.VerticalAlignment = 'Top'; $del.Margin = '10,-10,0,0'
+        $dot = New-Object System.Windows.Controls.Border
+        $dot.Width = 30; $dot.Height = 30; $dot.CornerRadius = 15; $dot.Background = ConvertTo-Brush '#FF453A'
+        $dot.Child = New-Glyph 'E711' 13 '#FFFFFF' $true
+        $del.Content = $dot
+        $del.Visibility = if ($script:PinMode) { 'Visible' } else { 'Collapsed' }
+        $del.Tag = $t
+        $del.Add_Click({ Remove-UserApp $this.Tag })
+        [void]$grid.Children.Add($del)
+    }
+
     $b.Content = $grid
-    $b.Tag = [pscustomobject]@{ Name = $t.name; Tile = $t; Pin = $pin; Button = $b }
+    $b.Tag = [pscustomobject]@{ Name = $t.name; Tile = $t; Pin = $pin; Del = $del; Button = $b }
     $b.Add_Click({
         if (Test-HoldHandled) { return }
         $it = $this.Tag
@@ -1198,6 +1369,7 @@ function Hide-Apps {
     $script:PinMode = $false
     $ui.PinModeText.Text = 'Ghim ra trang chủ'
     $ui.BtnPinMode.Background = ConvertTo-Brush '#33FFFFFF'
+    Update-DeleteBadges
     if ($ui.Search.Text) { $ui.Search.Text = '' }
 }
 
@@ -1219,9 +1391,13 @@ $ui.BtnPinMode.Add_Click({
     $script:PinMode = -not $script:PinMode
     $ui.PinModeText.Text = if ($script:PinMode) { 'Xong' } else { 'Ghim ra trang chủ' }
     $ui.BtnPinMode.Background = ConvertTo-Brush $(if ($script:PinMode) { '#B3FF9F0A' } else { '#33FFFFFF' })
-    if ($null -ne $script:AppItems) { Update-AppsHint }
+    if ($null -ne $script:AppItems) { Update-AppsHint; Update-DeleteBadges }
 })
 $ui.BtnCloseApps.Add_Click({ Close-AppsAnimated })
+function Update-DeleteBadges {
+    if ($null -eq $script:AppItems) { return }
+    foreach ($it in $script:AppItems) { if ($it.Del) { $it.Del.Visibility = if ($script:PinMode) { 'Visible' } else { 'Collapsed' } } }
+}
 
 # ---------------------------------------------------------------- Lịch (âm lịch) & Trung tâm thông báo
 $Can = 'Canh', 'Tân', 'Nhâm', 'Quý', 'Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ'                    # theo năm % 10
@@ -1605,7 +1781,7 @@ function Hide-Switcher {
 function Hide-Overlays {
     Hide-Switcher
     Hide-Apps
-    foreach ($o in 'Overlay', 'PowerOverlay') { $ui[$o].Visibility = 'Collapsed' }
+    foreach ($o in 'Overlay', 'PowerOverlay', 'AddOverlay') { $ui[$o].Visibility = 'Collapsed' }
 }
 
 function Show-Launcher {
@@ -1802,7 +1978,8 @@ function Test-LauncherForeground {
 }
 function Invoke-NavBack {
     if (Test-LauncherForeground) {
-        foreach ($o in 'PowerOverlay', 'Overlay') { if ($ui[$o].Visibility -eq 'Visible') { $ui[$o].Visibility = 'Collapsed'; return } }
+        if ($ui.NightOverlay.Visibility -eq 'Visible') { Exit-Night; return }
+        foreach ($o in 'PowerOverlay', 'Overlay', 'AddOverlay') { if ($ui[$o].Visibility -eq 'Visible') { $ui[$o].Visibility = 'Collapsed'; return } }
         if ($ui.SwitchOverlay.Visibility -eq 'Visible') { Hide-Switcher; return }
         if ($ui.AppsOverlay.Visibility -eq 'Visible') { Hide-Apps }
         return
@@ -1974,6 +2151,9 @@ $ccDefs = @(
             } } }
     @{ N = 'ScreenOff'; G = 0xE708; L = 'Tắt màn hình';    A = { Hide-CC; $ScreenOffTimer.Start() } }
     @{ N = 'Pip';       G = 0xE8A7; L = 'PiP YouTube';     A = { Hide-CC; Switch-Pip } }
+    @{ N = 'Sleep';     G = 0xE916; L = 'Hẹn giờ tắt';     A = { Switch-SleepTimer } }
+    @{ N = 'Split';     G = 0xE90C; L = 'Chia đôi';        A = { Hide-CC; Start-SplitView } }
+    @{ N = 'Night';     G = 0xE823; L = 'Đồng hồ';         A = { Hide-CC; Show-Launcher; Enter-Night $false } }
     @{ N = 'Notify';    G = 0xEA8F; L = 'Thông báo';       A = { Hide-CC; Open-NotificationCenter } }
     @{ N = 'Clean';     G = 0xE74D; L = 'Dọn dẹp';         A = { Hide-CC; Hide-Overlays; Show-Launcher; Show-CleanPanel } }
     @{ N = 'Power';     G = 0xE7E8; L = 'Nguồn';           A = { Hide-CC; Hide-Overlays; Show-Launcher; Show-PowerMenu } }
@@ -2004,11 +2184,14 @@ function Show-CcToast([string]$msg) { if ($ccWin.IsVisible) { $CcBattery.Text = 
 function Update-CC {
     $b = Get-Battery
     $CcBattery.Text = if ($b) { "Pin $($b.Pct)%" + $(if ($b.Charging) { ' · đang sạc' } else { '' }) } else { '' }
-    $on = ConvertTo-Brush '#3A3A3C'
     $cc.Saver.Button.Background   = ConvertTo-Brush $(if ($script:SaverOn) { '#30D158' } else { '#3A3A3C' })
     $cc.AutoKbd.Button.Background = ConvertTo-Brush $(if ($script:AutoKbd) { '#0A84FF' } else { '#3A3A3C' })
     $cc.Pip.Button.Background     = ConvertTo-Brush $(if ($script:Pip) { '#0A84FF' } else { '#3A3A3C' })
     $cc.BriUp.Label.Text = if ($null -ne $script:Bri) { "Sáng $($script:Bri)%" } else { 'Độ sáng' }
+    $left = Get-SleepMinutesLeft
+    $cc.Sleep.Label.Text = if ($left -gt 0) { "Tắt sau $left phút" } else { 'Hẹn giờ tắt' }
+    $cc.Sleep.Button.Background = ConvertTo-Brush $(if ($left -gt 0) { '#FF9F0A' } else { '#3A3A3C' })
+    $cc.Split.Button.Background = ConvertTo-Brush $(if ($script:Split) { '#0A84FF' } else { '#3A3A3C' })
 }
 
 # Tự đóng sau 8 giây không chạm.
@@ -2020,6 +2203,7 @@ function Hide-CC { $CcHide.Stop(); if ($ccWin.IsVisible) { $ccWin.Hide() } }
 function Switch-CC {
     if ($ccWin.IsVisible) { Hide-CC; return }
     Initialize-Brightness
+    Update-NowPlaying
     Update-CC
     $ccWin.Show()
     $ccWin.UpdateLayout()
@@ -2034,6 +2218,647 @@ $ui.BtnStatus.Add_Click({ Switch-CC })
 # Xoay màn hình / đổi độ phân giải -> đặt lại vị trí.
 [System.Windows.SystemParameters]::add_StaticPropertyChanged({ param($s, $e) if ($e.PropertyName -eq 'WorkArea') { Set-NavPosition; Hide-CC } })
 
+# ---------------------------------------------------------------- Việc nền (mạng, tải tệp) không làm đứng giao diện
+# Chạy scriptblock trong runspace riêng; khi xong gọi $done với kết quả trên luồng giao diện.
+$script:Jobs = New-Object System.Collections.ArrayList
+$JobTimer = New-Object System.Windows.Threading.DispatcherTimer
+$JobTimer.Interval = [TimeSpan]::FromMilliseconds(200)
+$JobTimer.Add_Tick({
+    foreach ($j in @($script:Jobs)) {
+        if (-not $j.Handle.IsCompleted) { continue }
+        $res = $null
+        try { $res = @($j.PS.EndInvoke($j.Handle))[0] } catch { $res = @{ Error = $_.Exception.Message } }
+        $j.PS.Dispose()
+        [void]$script:Jobs.Remove($j)
+        try { & $j.Done $res } catch { Show-Toast "Lỗi: $($_.Exception.Message)" }
+    }
+    if ($script:Jobs.Count -eq 0) { $JobTimer.Stop() }
+})
+function Start-BgJob([scriptblock]$work, [object[]]$arguments, [scriptblock]$done) {
+    $ps = [powershell]::Create()
+    [void]$ps.AddScript($work.ToString())
+    foreach ($a in $arguments) { [void]$ps.AddArgument($a) }
+    [void]$script:Jobs.Add(@{ PS = $ps; Handle = $ps.BeginInvoke(); Done = $done })
+    $JobTimer.Start()
+}
+
+# ---------------------------------------------------------------- Đang phát (bộ điều khiển media chung của Windows)
+$script:Media = $null
+$script:NowKey = $null
+function Initialize-Media {
+    if ($null -ne $script:Media) { return [bool]$script:Media.Ok }
+    $script:Media = @{ Ok = $false }
+    try {
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime
+        $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+            $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+        $M = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+        $script:Media = @{
+            Ok     = $true
+            AsTask = $asTask
+            Props  = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties, Windows.Media.Control, ContentType = WindowsRuntime]
+            Stream = [Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType = WindowsRuntime]
+        }
+        $script:Media.Mgr = Wait-WinRT ($M::RequestAsync()) $M
+        if (-not $script:Media.Mgr) { $script:Media.Ok = $false }
+    } catch { $script:Media = @{ Ok = $false } }
+    return [bool]$script:Media.Ok
+}
+# Chờ một thao tác WinRT (tối đa 2 giây — không treo giao diện lâu).
+function Wait-WinRT($op, [type]$type) {
+    $task = $script:Media.AsTask.MakeGenericMethod($type).Invoke($null, @($op))
+    if ($task.Wait(2000)) { return $task.Result }
+    return $null
+}
+
+# Tên trang web thường dính đuôi "- NhacCuaTui", "| lyric"… — bỏ cho gọn.
+function Format-MediaText([string]$title, [string]$artist) {
+    $t = ($title -split ' \| ')[0]
+    $t = $t -replace '\s+-\s+(NhacCuaTui|YouTube Music|YouTube|Zing MP3|Spotify)\s*$', '' -replace '\s+-\s+mp3 download\s*$', ''
+    if (-not $artist -and $t -match '^(.+?)\s+-\s+(.+)$') { $t = $Matches[1]; $artist = $Matches[2] }
+    return @($t.Trim(), [string]$artist)
+}
+function Get-SourceName([string]$appId) {
+    if ($appId -match '^(Chrome|MSEdge)\.(www\.)?([^_/]+)') { return $Matches[3] }
+    if ($appId -match '([^\\!]+?)(\.exe)?$') { return $Matches[1] }
+    return $appId
+}
+
+function Update-NowPlaying {
+    if (-not (Initialize-Media)) { $ui.NowCard.Visibility = 'Collapsed'; return }
+    try { $s = $script:Media.Mgr.GetCurrentSession() } catch { $s = $null }
+    if (-not $s) { $ui.NowCard.Visibility = 'Collapsed'; $script:NowKey = $null; $script:NowText = $null; return }
+    $p = Wait-WinRT ($s.TryGetMediaPropertiesAsync()) $script:Media.Props
+    if (-not $p -or -not $p.Title) { $ui.NowCard.Visibility = 'Collapsed'; return }
+    $playing = "$($s.GetPlaybackInfo().PlaybackStatus)" -eq 'Playing'
+    $txt = Format-MediaText $p.Title $p.Artist
+    $ui.NowTitle.Text = $txt[0]
+    $ui.NowArtist.Text = $txt[1]
+    $ui.NowSource.Text = (Get-SourceName $s.SourceAppUserModelId).ToUpper()
+    $ui.NowPlayIcon.Text = [string][char]$(if ($playing) { 0xE769 } else { 0xE768 })
+    $script:NowText = $txt[0]
+    $ui.NowCard.Visibility = 'Visible'
+    # Ảnh bìa chỉ đọc lại khi đổi bài.
+    $key = "$($s.SourceAppUserModelId)|$($p.Title)"
+    if ($key -ne $script:NowKey) {
+        $script:NowKey = $key
+        $ui.NowArt.Source = $null
+        if ($p.Thumbnail) {
+            try {
+                $ws = Wait-WinRT ($p.Thumbnail.OpenReadAsync()) $script:Media.Stream
+                if ($ws) {
+                    $ms = New-Object System.IO.MemoryStream
+                    [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($ws).CopyTo($ms)
+                    $ms.Position = 0
+                    $bi = New-Object System.Windows.Media.Imaging.BitmapImage
+                    $bi.BeginInit(); $bi.StreamSource = $ms; $bi.DecodePixelWidth = 160; $bi.CacheOption = 'OnLoad'; $bi.EndInit(); $bi.Freeze()
+                    $ui.NowArt.Source = $bi
+                }
+            } catch {}
+        }
+    }
+}
+$ui.NowArt.Clip = New-Object System.Windows.Media.RectangleGeometry ((New-Object System.Windows.Rect 0, 0, 80, 80), 18, 18)
+
+function Invoke-MediaCommand([string]$cmd) {
+    if (Initialize-Media) {
+        $s = $script:Media.Mgr.GetCurrentSession()
+        if ($s) {
+            $op = switch ($cmd) { 'prev' { $s.TrySkipPreviousAsync() } 'next' { $s.TrySkipNextAsync() } default { $s.TryTogglePlayPauseAsync() } }
+            [void](Wait-WinRT $op ([bool]))
+            Start-Sleep -Milliseconds 250
+            Update-NowPlaying
+            return
+        }
+    }
+    [TouchLauncher.Native]::Key($(switch ($cmd) { 'prev' { $VK.Prev } 'next' { $VK.Next } default { $VK.Play } }))
+}
+$ui.BtnNowPrev.Add_Click({ Invoke-MediaCommand 'prev' })
+$ui.BtnNowPlay.Add_Click({ Invoke-MediaCommand 'play' })
+$ui.BtnNowNext.Add_Click({ Invoke-MediaCommand 'next' })
+
+# Cập nhật 3 giây/lần, chỉ khi launcher đang hiện (bật/tắt theo Activated/Deactivated).
+$NowTimer = New-Object System.Windows.Threading.DispatcherTimer([System.Windows.Threading.DispatcherPriority]::Background)
+$NowTimer.Interval = [TimeSpan]::FromSeconds(3)
+$NowTimer.Add_Tick({ Update-NowPlaying })
+
+# Dừng mọi nguồn đang phát (dùng cho hẹn giờ). Không dùng phím Phát/Dừng vì nó có thể bật nhạc lên lại.
+function Stop-AllMedia {
+    if (Initialize-Media) {
+        foreach ($s in @($script:Media.Mgr.GetSessions())) {
+            if ("$($s.GetPlaybackInfo().PlaybackStatus)" -eq 'Playing') { [void](Wait-WinRT ($s.TryPauseAsync()) ([bool])) }
+        }
+        return
+    }
+    [TouchLauncher.Native]::Key(0xB2)   # VK_MEDIA_STOP
+}
+
+# ---------------------------------------------------------------- Hẹn giờ tắt nhạc
+$script:SleepAt = $null
+$SleepSteps = 0, 15, 30, 60
+$SleepTimer = New-Object System.Windows.Threading.DispatcherTimer
+$SleepTimer.Interval = [TimeSpan]::FromSeconds(20)
+$SleepTimer.Add_Tick({
+    if (-not $script:SleepAt) { $SleepTimer.Stop(); return }
+    if ((Get-Date) -ge $script:SleepAt) {
+        $script:SleepAt = $null
+        $SleepTimer.Stop()
+        Stop-AllMedia
+        Exit-Night
+        Start-Sleep -Milliseconds 500
+        [TouchLauncher.Native]::MonitorOff()
+    }
+})
+function Get-SleepMinutesLeft { if ($script:SleepAt) { [int][math]::Ceiling(($script:SleepAt - (Get-Date)).TotalMinutes) } else { 0 } }
+# Bấm nút: Tắt -> 15 -> 30 -> 60 phút -> Tắt.
+function Switch-SleepTimer {
+    $left = Get-SleepMinutesLeft
+    $next = ($SleepSteps | Where-Object { $_ -gt $left } | Select-Object -First 1)
+    if (-not $next) { $next = 0 }
+    if ($next -eq 0) {
+        $script:SleepAt = $null; $SleepTimer.Stop()
+        Show-CcToast 'Đã tắt hẹn giờ.'
+    } else {
+        $script:SleepAt = (Get-Date).AddMinutes($next); $SleepTimer.Start()
+        Show-CcToast "Nhạc sẽ dừng và màn hình tắt sau $next phút."
+    }
+}
+
+# ---------------------------------------------------------------- Chia đôi màn hình
+$splitXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Touch Launcher Split" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize" Width="40"
+        Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" Stylus.IsTapFeedbackEnabled="False">
+  <Grid x:Name="Bar" Background="#01000000" Cursor="SizeWE">
+    <Border Width="8" Height="96" CornerRadius="4" Background="#E6FFFFFF" VerticalAlignment="Center"/>
+    <Button x:Name="SplitClose" VerticalAlignment="Top" Margin="0,12,0,0" Width="40" Height="40" Focusable="False" Cursor="Hand">
+      <Button.Template>
+        <ControlTemplate TargetType="Button">
+          <Border CornerRadius="20" Background="#E61C1C1E" BorderBrush="#66FFFFFF" BorderThickness="1">
+            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE711;" Foreground="White"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+        </ControlTemplate>
+      </Button.Template>
+    </Button>
+  </Grid>
+</Window>
+'@
+$splitWin = [Windows.Markup.XamlReader]::Parse($splitXaml)
+$splitWin.Add_SourceInitialized({ [TouchLauncher.Native]::MakeNoActivate((New-Object System.Windows.Interop.WindowInteropHelper $splitWin).Handle) })
+$SplitBar = $splitWin.FindName('Bar')
+$script:Split = $null
+
+# Vùng làm việc (pixel thật), chừa chỗ thanh điều hướng.
+function Get-SplitArea {
+    $s = Get-DpiScale
+    $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $l = $wa.Left; $r = $wa.Right
+    if ($NavEnabled -and $NavPos -eq 'right') { $r -= [int](($nav.ActualWidth + 12) * $s) }
+    if ($NavEnabled -and $NavPos -eq 'left')  { $l += [int](($nav.ActualWidth + 12) * $s) }
+    $b = $wa.Bottom
+    if ($NavEnabled -and $NavPos -eq 'bottom') { $b -= [int](($nav.ActualHeight + 12) * $s) }
+    return @{ L = $l; T = $wa.Top; R = $r; B = $b; S = $s }
+}
+
+function Set-SplitLayout {
+    $sp = $script:Split
+    if (-not $sp) { return }
+    $a = Get-SplitArea
+    $gap = [int](8 * $a.S)
+    $x = [int]($a.L + ($a.R - $a.L) * $sp.Ratio)
+    foreach ($h in $sp.Left, $sp.Right) { if ([TouchLauncher.Native]::IsIconic($h) -or [TouchLauncher.Native]::IsZoomed($h)) { [TouchLauncher.Native]::Restore($h) } }
+    [TouchLauncher.Native]::Place($sp.Left,  $false, $a.L, $a.T, $x - $a.L - $gap, $a.B - $a.T)
+    [TouchLauncher.Native]::Place($sp.Right, $false, $x + $gap, $a.T, $a.R - $x - $gap, $a.B - $a.T)
+    # Thanh chia (đơn vị DIP của WPF) nằm giữa hai cửa sổ.
+    $splitWin.Height = ($a.B - $a.T) / $a.S
+    $splitWin.Left = $x / $a.S - $splitWin.Width / 2
+    $splitWin.Top = $a.T / $a.S
+    if (-not $splitWin.IsVisible) { $splitWin.Show() }
+}
+
+function Start-SplitView {
+    $wins = @([TouchLauncher.Native]::GetAppWindows($PID) | Select-Object -First 2)
+    if ($wins.Count -lt 2) { Show-CcToast 'Cần mở ít nhất 2 app để chia đôi màn hình.'; return }
+    Hide-Overlays
+    $script:Split = @{ Left = $wins[0].Handle; Right = $wins[1].Handle; Ratio = 0.5 }
+    $win.WindowState = 'Minimized'
+    Set-SplitLayout
+    [TouchLauncher.Native]::Activate($wins[0].Handle)
+    $SplitGuard.Start()
+}
+
+function Stop-SplitView([bool]$maximize) {
+    $sp = $script:Split
+    $script:Split = $null
+    $SplitGuard.Stop()
+    if ($splitWin.IsVisible) { $splitWin.Hide() }
+    if ($sp -and $maximize) {
+        foreach ($h in $sp.Right, $sp.Left) { if ([TouchLauncher.Native]::IsWindow($h)) { [TouchLauncher.Native]::Maximize($h) } }
+        if ([TouchLauncher.Native]::IsWindow($sp.Left)) { [TouchLauncher.Native]::Activate($sp.Left) }
+    }
+}
+
+# Kéo thanh chia để đổi tỉ lệ (chuột hoặc ngón tay — cảm ứng được giả lập thành chuột).
+$script:SplitDrag = $false
+$SplitBar.Add_MouseLeftButtonDown({ param($s, $e)
+    if ($e.OriginalSource -is [System.Windows.Controls.Button]) { return }
+    $script:SplitDrag = $true; [void]$SplitBar.CaptureMouse(); $e.Handled = $true })
+$SplitBar.Add_MouseMove({ param($s, $e)
+    if (-not $script:SplitDrag) { return }
+    $p = $splitWin.PointToScreen($e.GetPosition($splitWin))
+    $a = Get-SplitArea
+    $ratio = [math]::Max(0.25, [math]::Min(0.75, ($p.X - $a.L) / ($a.R - $a.L)))
+    $splitWin.Left = ($a.L + ($a.R - $a.L) * $ratio) / $a.S - $splitWin.Width / 2
+    $script:Split.Ratio = $ratio })
+$SplitBar.Add_MouseLeftButtonUp({
+    if (-not $script:SplitDrag) { return }
+    $script:SplitDrag = $false; $SplitBar.ReleaseMouseCapture()
+    Set-SplitLayout })
+$splitWin.FindName('SplitClose').Add_Click({ Stop-SplitView $true })
+
+# Một trong hai app bị đóng -> thoát chia đôi, app còn lại phóng to.
+$SplitGuard = New-Object System.Windows.Threading.DispatcherTimer([System.Windows.Threading.DispatcherPriority]::Background)
+$SplitGuard.Interval = [TimeSpan]::FromSeconds(2)
+$SplitGuard.Add_Tick({
+    $sp = $script:Split
+    if (-not $sp) { $SplitGuard.Stop(); return }
+    if (-not [TouchLauncher.Native]::IsWindow($sp.Left) -or -not [TouchLauncher.Native]::IsWindow($sp.Right)) { Stop-SplitView $true }
+})
+$ui.BtnSplit.Add_Click({ Start-SplitView })
+
+# ---------------------------------------------------------------- Đồng hồ đầu giường / khung ảnh
+$NightCfg = $cfg.nightClock
+$NightIdleMin = if ($NightCfg.idleMinutes) { [int]$NightCfg.idleMinutes } else { 5 }
+$NightAuto = -not ($NightCfg -and $NightCfg.auto -eq $false)
+$script:NightPhotos = $null
+$script:NightIndex = 0
+$script:NightTick = 0
+$script:NightFront = $null
+
+function Get-NightPhotos {
+    if ($null -ne $script:NightPhotos) { return $script:NightPhotos }
+    $dir = if ($cfg.photoFolder) { [Environment]::ExpandEnvironmentVariables([string]$cfg.photoFolder) } else { [Environment]::GetFolderPath('MyPictures') }
+    $files = @()
+    if ($dir -and (Test-Path $dir)) {
+        $files = @(Get-ChildItem -Path $dir -Recurse -Depth 2 -File -Include *.jpg, *.jpeg, *.png -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Length -gt 30KB } | Select-Object -First 400 | ForEach-Object { $_.FullName })
+    }
+    $script:NightPhotos = @($files | Sort-Object { Get-Random })
+    return $script:NightPhotos
+}
+
+function Show-NextPhoto {
+    $photos = @(Get-NightPhotos)
+    if ($photos.Count -eq 0) { return }
+    $path = $photos[$script:NightIndex % $photos.Count]
+    $script:NightIndex++
+    try {
+        $bi = New-Object System.Windows.Media.Imaging.BitmapImage
+        $bi.BeginInit(); $bi.UriSource = [Uri]$path; $bi.DecodePixelWidth = 1600; $bi.CacheOption = 'OnLoad'; $bi.EndInit(); $bi.Freeze()
+    } catch { return }
+    # Đảo hai lớp ảnh rồi làm mờ dần sang ảnh mới.
+    $next = if ($script:NightFront -eq $ui.NightPhotoA) { $ui.NightPhotoB } else { $ui.NightPhotoA }
+    $prev = $script:NightFront
+    $next.Source = $bi
+    $dur = New-Object System.Windows.Duration ([TimeSpan]::FromSeconds(1.5))
+    $next.BeginAnimation([System.Windows.UIElement]::OpacityProperty, (New-Object System.Windows.Media.Animation.DoubleAnimation(0, 1, $dur)))
+    if ($prev) { $prev.BeginAnimation([System.Windows.UIElement]::OpacityProperty, (New-Object System.Windows.Media.Animation.DoubleAnimation(1, 0, $dur))) }
+    $script:NightFront = $next
+}
+
+function Update-NightClock {
+    $now = Get-Date
+    $ui.NightTime.Text = $now.ToString('HH:mm')
+    $ui.NightDate.Text = $Vi.TextInfo.ToTitleCase($now.ToString('dddd, dd MMMM', $Vi))
+    $ui.NightLunar.Text = Get-LunarText $now
+    $b = Get-Battery
+    $info = if ($b) { "Pin $($b.Pct)%" + $(if ($b.Charging) { ' · đang sạc' } else { '' }) } else { '' }
+    if ($script:NowText) { $info += "   ♪ $($script:NowText)" }
+    $ui.NightInfo.Text = $info
+}
+
+$NightTimer = New-Object System.Windows.Threading.DispatcherTimer
+$NightTimer.Interval = [TimeSpan]::FromSeconds(10)
+$NightTimer.Add_Tick({
+    $script:NightTick++
+    Update-NightClock
+    if ($script:NightTick % 2 -eq 0) { Show-NextPhoto }                       # ảnh mới mỗi 20 giây
+    if ($script:NightTick % 6 -eq 0) {                                        # dời đồng hồ mỗi phút, tránh lưu ảnh trên màn hình
+        $ui.NightClock.Margin = New-Object System.Windows.Thickness ((60 + (Get-Random -Maximum 60)), 0, 0, (50 + (Get-Random -Maximum 50)))
+    }
+    $b = Get-Battery
+    if ($b -and -not $b.Charging -and $script:NightAutoEntered) { Exit-Night }  # rút sạc -> thoát để giữ pin
+})
+
+function Enter-Night([bool]$auto) {
+    if ($ui.NightOverlay.Visibility -eq 'Visible') { return }
+    Hide-Overlays
+    $script:NightAutoEntered = $auto
+    $script:NightTick = 0
+    Update-NightClock
+    $ui.NightOverlay.Visibility = 'Visible'
+    Show-NextPhoto
+    $NightTimer.Start()
+    if ($NavEnabled) { $nav.Hide() }
+    $b = Get-Battery
+    if (-not $b -or $b.Charging) { [TouchLauncher.Native]::KeepDisplayOn($true) }
+}
+function Exit-Night {
+    if ($ui.NightOverlay.Visibility -ne 'Visible') { return }
+    $NightTimer.Stop()
+    [TouchLauncher.Native]::KeepDisplayOn($false)
+    $ui.NightOverlay.Visibility = 'Collapsed'
+    if ($NavEnabled -and -not $nav.IsVisible) { $nav.Show() }
+    foreach ($img in $ui.NightPhotoA, $ui.NightPhotoB) {
+        $img.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $null); $img.Opacity = 0; $img.Source = $null
+    }
+    $script:NightFront = $null
+    $script:NightPhotos = $null   # đọc lại thư mục ảnh lần sau (có thể đã thêm ảnh mới)
+}
+# Chạm bất kỳ đâu để thoát.
+$ui.NightOverlay.Add_PreviewMouseDown({ param($s, $e) Exit-Night; $e.Handled = $true })
+$ui.NightOverlay.Add_PreviewTouchDown({ param($s, $e) Exit-Night; $e.Handled = $true })
+
+# Tự bật khi: đang sạc + launcher đang ở trang chủ + không chạm máy N phút.
+$IdleTimer = New-Object System.Windows.Threading.DispatcherTimer([System.Windows.Threading.DispatcherPriority]::Background)
+$IdleTimer.Interval = [TimeSpan]::FromSeconds(60)
+$IdleTimer.Add_Tick({
+    if (-not $NightAuto -or $ui.NightOverlay.Visibility -eq 'Visible') { return }
+    $b = Get-Battery
+    if ($b -and -not $b.Charging) { return }
+    if (-not (Test-LauncherForeground)) { return }
+    if (@($ui.Overlay, $ui.PowerOverlay, $ui.AddOverlay, $ui.AppsOverlay, $ui.SwitchOverlay | Where-Object { $_.Visibility -eq 'Visible' }).Count) { return }
+    if ([TouchLauncher.Native]::IdleSeconds() -ge $NightIdleMin * 60) { Enter-Night $true }
+})
+
+# ---------------------------------------------------------------- Thêm app web bằng địa chỉ
+$script:AddInfo = $null
+$script:AddGroup = 'Của tôi'
+
+# Chạy nền: tải trang lấy tên (og:site_name / application-name / title) và icon tốt nhất (apple-touch-icon > icon > favicon.ico).
+$FetchSiteWork = {
+    param([string]$url, [string]$iconDir)
+    Add-Type -AssemblyName System.Net.Http, System.Drawing
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $res = @{ Url = $url; Name = $null; IconPath = $null; Error = $null }
+    $http = New-Object System.Net.Http.HttpClient
+    $http.Timeout = [TimeSpan]::FromSeconds(10)
+    $http.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36 TouchLauncher')
+    $html = ''; $base = [Uri]$url
+    try {
+        $resp = $http.GetAsync($url).Result
+        $base = $resp.RequestMessage.RequestUri
+        $html = $resp.Content.ReadAsStringAsync().Result
+    } catch { $res.Error = 'Không mở được trang (kiểm tra địa chỉ hoặc mạng).' }
+
+    function Get-Meta([string]$key) {
+        foreach ($p in @("<meta[^>]+(?:property|name)=[""']$key[""'][^>]*content=[""']([^""']+)", "<meta[^>]+content=[""']([^""']+)[""'][^>]*(?:property|name)=[""']$key[""']")) {
+            $m = [regex]::Match($html, $p, 'IgnoreCase'); if ($m.Success) { return [System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value).Trim() }
+        }
+    }
+    $name = Get-Meta 'og:site_name'
+    if (-not $name) { $name = Get-Meta 'application-name' }
+    if (-not $name) {
+        $m = [regex]::Match($html, '<title[^>]*>([^<]+)</title>', 'IgnoreCase')
+        if ($m.Success) { $name = ([System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value) -split '\s+[-|–·:]\s+')[0].Trim() }
+    }
+    if (-not $name) { $name = ($base.Host -replace '^(www|m|web|chat)\.', '' -split '\.')[0] }
+    if ($name.Length -gt 22) { $name = $name.Substring(0, 22).Trim() }
+    $res.Name = $name
+
+    # Ứng viên icon, tốt nhất trước.
+    $cands = New-Object System.Collections.Generic.List[string]
+    foreach ($m in [regex]::Matches($html, '<link[^>]+>', 'IgnoreCase')) {
+        $tag = $m.Value
+        $rel = [regex]::Match($tag, 'rel=["'']([^"'']+)', 'IgnoreCase').Groups[1].Value.ToLower()
+        $href = [regex]::Match($tag, 'href=["'']([^"'']+)', 'IgnoreCase').Groups[1].Value
+        if (-not $href -or $href -match '\.svg($|\?)' -or $rel -notmatch 'icon') { continue }
+        try { $abs = (New-Object Uri($base, [System.Net.WebUtility]::HtmlDecode($href))).AbsoluteUri } catch { continue }
+        if ($rel -match 'apple-touch-icon') { $cands.Insert(0, $abs) } else { $cands.Add($abs) }
+    }
+    $cands.Add("$($base.Scheme)://$($base.Host)/favicon.ico")
+    $cands.Add("https://www.google.com/s2/favicons?domain=$($base.Host)&sz=128")   # dự phòng cuối cùng
+
+    [void](New-Item -ItemType Directory -Force -Path $iconDir)
+    $out = Join-Path $iconDir (($base.Host -replace '[^a-zA-Z0-9.-]', '_') + '.png')
+    $best = $null; $bestSize = 0
+    foreach ($c in $cands) {
+        try {
+            $bytes = $http.GetByteArrayAsync($c).Result
+            $ms = New-Object System.IO.MemoryStream (, $bytes)
+            $bmp = $null
+            if ($bytes.Length -ge 4 -and $bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 1) {
+                $bmp = (New-Object System.Drawing.Icon($ms, 256, 256)).ToBitmap()
+            } else {
+                $bmp = New-Object System.Drawing.Bitmap $ms
+            }
+            if ($bmp.Width -gt $bestSize) { if ($best) { $best.Dispose() }; $best = $bmp; $bestSize = $bmp.Width } else { $bmp.Dispose() }
+            if ($bestSize -ge 96) { break }
+        } catch {}
+    }
+    if ($best) { $best.Save($out, [System.Drawing.Imaging.ImageFormat]::Png); $best.Dispose(); $res.IconPath = $out }
+    $http.Dispose()
+    return $res
+}
+
+function ConvertTo-WebUrl([string]$text) {
+    $t = $text.Trim()
+    if (-not $t) { return $null }
+    if ($t -notmatch '^[a-z]+://') { $t = "https://$t" }
+    $u = $null
+    if ([Uri]::TryCreate($t, 'Absolute', [ref]$u) -and $u.Scheme -in 'http', 'https' -and $u.Host -match '\.') { return $u.AbsoluteUri }
+    return $null
+}
+
+function Update-AddGroups {
+    $ui.AddGroups.Children.Clear()
+    $groups = @($cfg.tiles | ForEach-Object { if ($_.group) { [string]$_.group } } | Select-Object -Unique)
+    if ($groups -notcontains 'Của tôi') { $groups += 'Của tôi' }
+    foreach ($g in $groups) {
+        $b = New-Object System.Windows.Controls.Button
+        $b.Style = $win.FindResource('Glass')
+        $b.Height = 48; $b.Margin = '0,0,8,8'; $b.Padding = '16,0'; $b.FontSize = 16
+        $b.Content = $g; $b.Tag = $g
+        if ($g -eq $script:AddGroup) { $b.Background = ConvertTo-Brush '#0A84FF' }
+        $b.Add_Click({ $script:AddGroup = $this.Tag; Update-AddGroups })
+        [void]$ui.AddGroups.Children.Add($b)
+    }
+}
+
+function Show-AddApp {
+    $script:AddInfo = $null
+    $ui.AddUrl.Text = ''; $ui.AddName.Text = ''
+    $ui.AddIcon.Source = $null; $ui.AddLetter.Text = '+'
+    $ui.AddPreview.Background = ConvertTo-Brush '#3A3A3C'
+    $ui.AddStatus.Text = 'Nhập địa chỉ, ví dụ chat.zalo.me'
+    Update-AddGroups
+    $ui.AddOverlay.Visibility = 'Visible'
+    [void]$ui.AddUrl.Focus()
+}
+
+# Gõ xong địa chỉ (ngưng gõ 0,9 giây) -> tự lấy tên và icon.
+$AddDebounce = New-Object System.Windows.Threading.DispatcherTimer
+$AddDebounce.Interval = [TimeSpan]::FromMilliseconds(900)
+$AddDebounce.Add_Tick({
+    $AddDebounce.Stop()
+    $url = ConvertTo-WebUrl $ui.AddUrl.Text
+    if (-not $url) { $ui.AddStatus.Text = 'Địa chỉ chưa hợp lệ.'; return }
+    if ($script:AddInfo -and $script:AddInfo.Url -eq $url) { return }
+    $ui.AddStatus.Text = 'Đang lấy tên và icon…'
+    $script:AddPending = $url
+    Start-BgJob $FetchSiteWork @($url, $IconDir) {
+        param($r)
+        if ($r.Url -ne $script:AddPending) { return }   # người dùng đã gõ địa chỉ khác
+        $script:AddInfo = $r
+        if (-not $ui.AddName.Text -or $ui.AddName.Tag -eq 'auto') { $ui.AddName.Text = $r.Name; $ui.AddName.Tag = 'auto' }
+        if ($r.IconPath) {
+            $script:ImgCache.Remove($r.IconPath)
+            $ui.AddIcon.Source = Get-FileImage $r.IconPath
+            $ui.AddLetter.Text = ''; $ui.AddPreview.Background = $LightTile
+        } else {
+            $ui.AddIcon.Source = $null; $ui.AddLetter.Text = Get-Initial $r.Name
+            $ui.AddPreview.Background = New-Gradient (Get-BadgeColor $r.Name)
+        }
+        $ui.AddStatus.Text = if ($r.Error) { $r.Error + ' Vẫn có thể thêm.' } elseif ($r.IconPath) { 'Đã lấy được tên và icon.' } else { 'Không tìm thấy icon, sẽ dùng chữ cái đầu.' }
+    }
+})
+$ui.AddUrl.Add_TextChanged({ $AddDebounce.Stop(); $AddDebounce.Start() })
+$ui.AddName.Add_TextChanged({ if ($ui.AddName.IsKeyboardFocusWithin) { $ui.AddName.Tag = $null } })
+$ui.BtnAddApp.Add_Click({ Show-AddApp })
+$ui.BtnAddCancel.Add_Click({ $ui.AddOverlay.Visibility = 'Collapsed' })
+$ui.BtnAddSave.Add_Click({
+    $url = ConvertTo-WebUrl $ui.AddUrl.Text
+    $name = $ui.AddName.Text.Trim()
+    if (-not $url) { $ui.AddStatus.Text = 'Hãy nhập địa chỉ trang web hợp lệ.'; return }
+    if (-not $name) { $ui.AddStatus.Text = 'Hãy đặt tên cho app.'; return }
+    if (Get-Tile $name) { $ui.AddStatus.Text = "Đã có app tên '$name', hãy đặt tên khác."; return }
+    $icon = if ($script:AddInfo -and $script:AddInfo.Url -eq $url -and $script:AddInfo.IconPath) {
+        'icons\' + [IO.Path]::GetFileName($script:AddInfo.IconPath) } else { $null }
+    $tile = [pscustomobject]@{
+        group = $script:AddGroup; name = $name; icon = (Get-Initial $name); iconImage = $icon
+        color = (Get-BadgeColor $name); type = 'app'; target = $url; match = [regex]::Escape($name); user = $true
+    }
+    $cfg.tiles = @(@($cfg.tiles) + $tile)
+    Save-UserApps
+    $script:Pins = @($script:Pins) + $name
+    Save-Pins
+    $ui.AddOverlay.Visibility = 'Collapsed'
+    Load-Apps
+    Build-Home
+    Show-Toast "Đã thêm $name vào Thư viện và trang chủ."
+})
+
+function Remove-UserApp($t) {
+    $cfg.tiles = @($cfg.tiles | Where-Object { $_ -ne $t })
+    Save-UserApps
+    if (Test-Pinned $t.name) { $script:Pins = @($script:Pins | Where-Object { $_ -ne $t.name }); Save-Pins }
+    Load-Apps
+    Update-DeleteBadges
+    Build-Home
+    Show-Toast "Đã xóa $($t.name)."
+}
+
+# ---------------------------------------------------------------- Tự kiểm tra bản mới (chỉ bản .exe một tệp)
+$UpdateRepo = 'npduylab/windows-tablet-launcher'
+$CurrentVersion = if ($env:TOUCHLAUNCHER_VERSION) { $env:TOUCHLAUNCHER_VERSION } else { '0.0.0' }
+$UpdateStatePath = Join-Path $env:LOCALAPPDATA 'TouchLauncher\update.json'
+$script:UpdateInfo = $null
+$script:RestartExe = $null
+
+$CheckUpdateWork = {
+    param([string]$repo)
+    Add-Type -AssemblyName System.Net.Http
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $http = New-Object System.Net.Http.HttpClient
+    $http.Timeout = [TimeSpan]::FromSeconds(15)
+    $http.DefaultRequestHeaders.UserAgent.ParseAdd('TouchLauncher-UpdateCheck')
+    try {
+        $j = $http.GetStringAsync("https://api.github.com/repos/$repo/releases/latest").Result | ConvertFrom-Json
+        $asset = @($j.assets | Where-Object { $_.name -eq 'TouchLauncher.exe' })[0]
+        return @{ Tag = [string]$j.tag_name; Url = $asset.browser_download_url; Page = $j.html_url }
+    } catch { return @{ Error = $_.Exception.Message } }
+    finally { $http.Dispose() }
+}
+
+$DownloadWork = {
+    param([string]$url, [string]$dest)
+    Add-Type -AssemblyName System.Net.Http
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $http = New-Object System.Net.Http.HttpClient
+    $http.Timeout = [TimeSpan]::FromMinutes(3)
+    $http.DefaultRequestHeaders.UserAgent.ParseAdd('TouchLauncher-Update')
+    try {
+        $bytes = $http.GetByteArrayAsync($url).Result
+        if ($bytes.Length -lt 10KB -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { return @{ Error = 'Tệp tải về không hợp lệ.' } }
+        [IO.File]::WriteAllBytes($dest, $bytes)
+        return @{ Path = $dest }
+    } catch { return @{ Error = $_.Exception.Message } }
+    finally { $http.Dispose() }
+}
+
+function Test-NewerVersion([string]$tag) {
+    $a = $null; $b = $null
+    if (-not [version]::TryParse($tag.TrimStart('v'), [ref]$a) -or -not [version]::TryParse($CurrentVersion, [ref]$b)) { return $false }
+    return $a -gt $b
+}
+
+function Start-UpdateCheck {
+    if (-not $env:TOUCHLAUNCHER_STANDALONE -or $cfg.updateCheck -eq $false) { return }
+    # Tối đa 1 lần mỗi 20 giờ.
+    try {
+        $st = Get-Content $UpdateStatePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($st.lastCheck -and ((Get-Date) - [datetime]$st.lastCheck).TotalHours -lt 20 -and -not $st.pending) { return }
+    } catch {}
+    Start-BgJob $CheckUpdateWork @($UpdateRepo) {
+        param($r)
+        if ($r.Error -or -not $r.Tag) { return }
+        $newer = (Test-NewerVersion $r.Tag) -and $r.Url
+        try { [IO.File]::WriteAllText($UpdateStatePath, (ConvertTo-Json @{ lastCheck = (Get-Date).ToString('o'); pending = [bool]$newer }), $Utf8NoBom) } catch {}
+        if ($newer) {
+            $script:UpdateInfo = $r
+            $ui.UpdateText.Text = "Có bản mới $($r.Tag.TrimStart('v')) (đang dùng $CurrentVersion)"
+            $ui.UpdateBar.Visibility = 'Visible'
+        }
+    }
+}
+
+$ui.BtnUpdateLater.Add_Click({ $ui.UpdateBar.Visibility = 'Collapsed' })
+$ui.BtnUpdateNow.Add_Click({
+    $u = $script:UpdateInfo
+    if (-not $u) { return }
+    $exe = $env:TOUCHLAUNCHER_EXE
+    $ui.UpdateText.Text = 'Đang tải bản mới…'
+    $ui.BtnUpdateNow.IsEnabled = $false
+    Start-BgJob $DownloadWork @($u.Url, "$exe.new") {
+        param($r)
+        $exe = $env:TOUCHLAUNCHER_EXE
+        $ui.BtnUpdateNow.IsEnabled = $true
+        if ($r.Error) {
+            $ui.UpdateText.Text = 'Không tải được bản mới. Mở trang tải về…'
+            Start-Process $script:UpdateInfo.Page
+            return
+        }
+        try {
+            # Windows cho đổi tên exe đang chạy: cất bản cũ sang .old, đặt bản mới vào chỗ cũ, rồi khởi động lại.
+            $old = "$exe.old"
+            if (Test-Path $old) { Remove-Item $old -Force }
+            Rename-Item -LiteralPath $exe -NewName ([IO.Path]::GetFileName($old))
+            Move-Item -LiteralPath $r.Path -Destination $exe
+            try { Remove-Item $UpdateStatePath -ErrorAction SilentlyContinue } catch {}
+            $script:RestartExe = $exe
+            $win.Close()
+        } catch {
+            $ui.UpdateText.Text = "Không thay được tệp ($($_.Exception.Message)). Mở trang tải về…"
+            Start-Process $script:UpdateInfo.Page
+        }
+    }
+})
+# Dọn bản cũ còn lại sau lần cập nhật trước.
+if ($env:TOUCHLAUNCHER_EXE -and (Test-Path "$($env:TOUCHLAUNCHER_EXE).old")) { Remove-Item "$($env:TOUCHLAUNCHER_EXE).old" -Force -ErrorAction SilentlyContinue }
+
 # ---------------------------------------------------------------- Tối ưu chính launcher
 function Optimize-Self {
     [GC]::Collect()
@@ -2046,13 +2871,18 @@ $TrimTimer = New-Object System.Windows.Threading.DispatcherTimer
 $TrimTimer.Interval = [TimeSpan]::FromSeconds(30)
 $TrimTimer.Add_Tick({ $TrimTimer.Stop(); Optimize-Self })
 
-$win.Add_Activated({ $TrimTimer.Stop(); Update-Status; Update-DockRecent; $StatusTimer.Start() })
+$win.Add_Activated({
+    $TrimTimer.Stop(); Update-Status; Update-DockRecent; $StatusTimer.Start()
+    if ($script:Split) { Stop-SplitView $false }
+    Update-NowPlaying; $NowTimer.Start()
+})
 $win.Add_Deactivated({
     $StatusTimer.Stop()
+    $NowTimer.Stop()
     if ($ui.SwitchOverlay.Visibility -eq 'Visible') { Hide-Switcher }
     $TrimTimer.Start()
 })
-$win.Add_Closed({ $nav.Close(); $ccWin.Close() })
+$win.Add_Closed({ $nav.Close(); $ccWin.Close(); $splitWin.Close(); [TouchLauncher.Native]::KeepDisplayOn($false) })
 $win.Add_ContentRendered({
     if ($cfg.autoCleanOnStart) {
         $r = Stop-Junk $cfg.killList
@@ -2062,8 +2892,15 @@ $win.Add_ContentRendered({
         if (Set-AutoKeyboard $true) { $script:AutoKbd = $true; Show-Toast 'Đã bật: bàn phím cảm ứng tự hiện khi chạm vào ô nhập chữ.' }
     }
     if ($NavEnabled -and -not $nav.IsVisible) { $nav.Show() }
+    $IdleTimer.Start()
+    $UpdateDelay.Start()
     Optimize-Self
 })
+
+# Kiểm tra bản mới sau khi mở 15 giây (không làm chậm lúc khởi động).
+$UpdateDelay = New-Object System.Windows.Threading.DispatcherTimer
+$UpdateDelay.Interval = [TimeSpan]::FromSeconds(15)
+$UpdateDelay.Add_Tick({ $UpdateDelay.Stop(); Start-UpdateCheck })
 
 Build-Home
 Update-Status
@@ -2077,6 +2914,9 @@ if ($Check) {
     "Cửa sổ đang mở: $($open.Count). PiP tìm thấy: $(if (Find-PipWindow) { (Find-PipWindow).Title } else { '(chưa mở YouTube)' })"
     "Màn hình chính: $($ui.TilePanel.Children.Count) icon. Dock: $($ui.DockFav.Children.Count) + $($ui.DockRecent.Children.Count). Bộ sưu tập: $($script:AppItems.Count) app trong $(@($script:Sections).Count) nhóm. Lịch: $($ui.CalTitle.Text), $($ui.CalGrid.Children.Count) ô, $($ui.LunarText.Text). Trung tâm điều khiển: $($CcGrid.Children.Count) nút."
     "Trình duyệt: $Browser."
+    Update-NowPlaying
+    "Đang phát: $(if ($ui.NowCard.Visibility -eq 'Visible') { "$($ui.NowTitle.Text) [$($ui.NowSource.Text)]" } else { '(không có)' }). App tự thêm: $(@($cfg.tiles | Where-Object { $_.user }).Count). Ảnh cho đồng hồ đêm: $(@(Get-NightPhotos).Count)."
+    "Rảnh (không chạm): $([TouchLauncher.Native]::IdleSeconds()) giây. Phiên bản: $CurrentVersion$(if ($env:TOUCHLAUNCHER_STANDALONE) { ' (exe một tệp)' })."
     Initialize-Brightness
     "Tự hiện bàn phím: $script:AutoKbd. Độ sáng: $(if ($null -ne $script:Bri) { "$($script:Bri)%" } else { 'không hỗ trợ' }). Tiết kiệm pin: $script:SaverOn"
     exit 0
@@ -2088,3 +2928,4 @@ $self.PriorityClass = 'BelowNormal'
 
 [void]$win.ShowDialog()
 $script:Mutex.ReleaseMutex()
+if ($script:RestartExe) { Start-Process -FilePath $script:RestartExe }

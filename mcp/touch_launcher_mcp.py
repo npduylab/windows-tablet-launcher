@@ -62,7 +62,19 @@ def log(*args):
 
 def load_config():
     with open(CONFIG_PATH, encoding="utf-8-sig") as f:
-        return json.load(f)
+        cfg = json.load(f)
+    # App người dùng tự thêm trong launcher (nút "+ Thêm app").
+    user_path = os.path.join(LAUNCHER_DIR, "apps.user.json")
+    if os.path.isfile(user_path):
+        try:
+            with open(user_path, encoding="utf-8-sig") as f:
+                extra = json.load(f)
+            if isinstance(extra, dict):
+                extra = [extra]
+            cfg["tiles"] = cfg.get("tiles", []) + [t for t in extra if isinstance(t, dict) and t.get("name") and t.get("target")]
+        except (OSError, ValueError):
+            pass
+    return cfg
 
 
 def process_name(pid):
