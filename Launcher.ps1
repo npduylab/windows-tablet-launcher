@@ -350,7 +350,7 @@ foreach ($u in $userApps) { $u | Add-Member -NotePropertyName user -NoteProperty
 $cfg.tiles = @(@($cfg.tiles) + $userApps)
 function Save-UserApps {
     $list = @($cfg.tiles | Where-Object { $_.user } | ForEach-Object {
-        [pscustomobject]@{ group = $_.group; name = $_.name; icon = $_.icon; iconImage = $_.iconImage; color = $_.color
+        [pscustomobject]@{ group = $_.group; folder = $_.folder; profile = $_.profile; name = $_.name; icon = $_.icon; iconImage = $_.iconImage; color = $_.color
                            type = $_.type; target = $_.target; match = $_.match } })
     [IO.File]::WriteAllText($userAppsPath, (ConvertTo-Json -InputObject $list -Depth 4), $Utf8NoBom)
 }
@@ -387,8 +387,9 @@ $BrowserArgs = @($cfg.browserArgs | Where-Object { $_ })
 $BrowserName = if ($Browser) { [IO.Path]::GetFileNameWithoutExtension($Browser) } else { '' }
 $VolumeStep = if ($cfg.volumeStep) { [int]$cfg.volumeStep } else { 2 }
 
-function Start-Browser([string[]]$parts) {
+function Start-Browser([string[]]$parts, [string]$profileDir) {
     $a = @()
+    if ($profileDir) { $a += "--profile-directory=`"$profileDir`"" }
     $a += $BrowserArgs
     $a += $parts
     Start-Process -FilePath $Browser -ArgumentList ($a -join ' ')
@@ -789,17 +790,29 @@ $xaml = @'
       </Border>
     </Grid>
 
+    <!-- Thư mục -->
+    <Grid x:Name="FolderOverlay" Background="#99000000" Visibility="Collapsed">
+      <Border Background="#E62C2C2E" CornerRadius="40" Padding="28,22,28,18" MaxWidth="640" Margin="24"
+              HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="#33FFFFFF" BorderThickness="1">
+        <StackPanel>
+          <TextBlock x:Name="FolderTitle" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+          <WrapPanel x:Name="FolderGrid" HorizontalAlignment="Center" MaxWidth="580"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
     <!-- Thêm app web -->
     <Grid x:Name="AddOverlay" Background="#CC000000" Visibility="Collapsed">
       <Border Background="#F21C1C1E" CornerRadius="30" Padding="30" MaxWidth="680" Margin="24"
               BorderBrush="#3A3A3C" BorderThickness="1" VerticalAlignment="Center">
         <StackPanel>
           <TextBlock Text="Thêm app web" FontSize="30" FontWeight="SemiBold"/>
-          <TextBlock Text="Dán địa chỉ trang web. Launcher tự lấy tên và icon của trang." FontSize="16" Foreground="#8E8E93"
+          <TextBlock Text="Dán địa chỉ trang web — hoặc gõ email Gmail để có một icon riêng cho tài khoản đó." FontSize="16" Foreground="#8E8E93"
                      TextWrapping="Wrap" Margin="0,6,0,18"/>
           <TextBlock Text="Địa chỉ" FontSize="15" Foreground="#AEAEB2" Margin="4,0,0,6"/>
           <TextBox x:Name="AddUrl" FontSize="20" Height="56" Padding="16,0" VerticalContentAlignment="Center"
                    Background="#2C2C2E" Foreground="#FFFFFF" CaretBrush="#FFFFFF" BorderBrush="#3A3A3C" BorderThickness="2"/>
+          <WrapPanel x:Name="AddSuggest" Margin="0,8,0,0"/>
           <TextBlock Text="Tên app" FontSize="15" Foreground="#AEAEB2" Margin="4,14,0,6"/>
           <TextBox x:Name="AddName" FontSize="20" Height="56" Padding="16,0" VerticalContentAlignment="Center"
                    Background="#2C2C2E" Foreground="#FFFFFF" CaretBrush="#FFFFFF" BorderBrush="#3A3A3C" BorderThickness="2"/>
@@ -813,7 +826,7 @@ $xaml = @'
               </Grid>
             </Border>
             <TextBlock x:Name="AddStatus" FontSize="16" Foreground="#AEAEB2" TextWrapping="Wrap" VerticalAlignment="Center" Margin="16,0,0,0"
-                       Text="Nhập địa chỉ, ví dụ chat.zalo.me"/>
+                       Text="Ví dụ: chat.zalo.me hoặc ten@gmail.com"/>
           </DockPanel>
           <WrapPanel HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button x:Name="BtnAddCancel" Style="{StaticResource Glass}" Content="Hủy"/>
@@ -873,7 +886,7 @@ foreach ($n in 'WallImage','MainArea','BtnStatus','BatteryText','BatteryIcon','S
                'NowCard','NowArt','NowSource','NowTitle','NowArtist','BtnNowPrev','BtnNowPlay','BtnNowNext','NowPlayIcon',
                'BtnAddApp','BtnSplit','AddOverlay','AddUrl','AddName','AddGroups','AddPreview','AddLetter','AddIcon','AddStatus','BtnAddCancel','BtnAddSave',
                'NightOverlay','NightPhotoA','NightPhotoB','NightClock','NightTime','NightDate','NightLunar','NightInfo',
-               'UpdateBar','UpdateText','BtnUpdateNow','BtnUpdateLater',
+               'UpdateBar','UpdateText','BtnUpdateNow','BtnUpdateLater','FolderOverlay','FolderTitle','FolderGrid','AddSuggest',
                'BtnCalPrev','BtnCalNext','BtnCalTitle','CalTitle','CalHead','CalGrid',
                'Spot','SpotHint','BtnSpotClear','SpotResults','SpotList',
                'AppsOverlay','AppsDock','BtnPinMode','PinModeText','BtnKbd2','BtnCloseApps','Search','SearchHint','AppsHint','AppGrid',
@@ -925,6 +938,7 @@ function Get-Battery {
 function Update-Status {
     $now = Get-Date
     Update-CalendarIfNeeded
+    Update-Badges
     $ui.Clock.Text = $now.ToString('HH:mm')
     $ui.DateText.Text = $Vi.TextInfo.ToTitleCase($now.ToString('dddd, dd MMMM', $Vi))
     $ui.StatusTime.Text = $now.ToString('HH:mm') + '   ' + $Vi.TextInfo.ToTitleCase($now.ToString('ddd dd/MM', $Vi))
@@ -1018,6 +1032,17 @@ function New-Squircle($t, [int]$px) {
     $bd.CornerRadius = New-Object System.Windows.CornerRadius ([math]::Round($px * 0.23))
     $glyphPx = [int]($px * 0.5)
     $src = $null
+    if ($t.type -eq 'folder') {
+        $bd.Background = ConvertTo-Brush '#4DFFFFFF'
+        $grid = New-Object System.Windows.Controls.Primitives.UniformGrid
+        $grid.Columns = 2; $grid.Rows = 2; $grid.Margin = [int]($px * 0.12)
+        foreach ($c in @($t.children | Select-Object -First 4)) {
+            $mini = New-Squircle $c ([int]($px * 0.33)); $mini.Margin = 2
+            [void]$grid.Children.Add($mini)
+        }
+        $bd.Child = $grid
+        return $bd
+    }
     if ($t.iconImage) { $src = Get-FileImage ([string]$t.iconImage) }
     switch ($t.type) {
         'shellapp' { $src = Get-AppIcon $t.target }
@@ -1036,16 +1061,103 @@ function New-Squircle($t, [int]$px) {
     return $bd
 }
 
+# ---------------------------------------------------------------- Cửa sổ của từng app & số chưa đọc
+# Mỗi cửa sổ chỉ thuộc về một app. App có "match" cụ thể hơn (app tự thêm, vd. Gmail theo tài khoản)
+# được xét trước, nên icon Gmail chung chỉ nhận cửa sổ Gmail còn lại.
+$script:ProcNames = @{}
+function Get-TileWindowMap {
+    $map = @{}
+    if (-not $BrowserName) { return $map }
+    $wins = @([TouchLauncher.Native]::GetAppWindows($PID) | Where-Object { $_.Title -notmatch '(Edge|Chrome)$' })
+    $used = @{}
+    $tiles = @($cfg.tiles | Where-Object { $_.match }) | Sort-Object @{ Expression = { if ($_.user) { 0 } else { 1 } } }, @{ Expression = { -([string]$_.match).Length } }
+    foreach ($t in $tiles) {
+        foreach ($w in $wins) {
+            $key = $w.Handle.ToInt64()
+            if ($used.ContainsKey($key) -or $w.Title -notmatch $t.match) { continue }
+            if (-not $script:ProcNames.ContainsKey($w.Pid)) {
+                $script:ProcNames[$w.Pid] = (Get-Process -Id $w.Pid -ErrorAction SilentlyContinue).ProcessName
+            }
+            if ($script:ProcNames[$w.Pid] -ne $BrowserName) { continue }
+            $map[$t.name] = $w; $used[$key] = $true
+            break
+        }
+    }
+    return $map
+}
+
+# Số trong ngoặc ở tiêu đề: "(3) Facebook", "Hộp thư đến (132) - ai@gmail.com - Gmail".
+function Get-TitleCount([string]$title) {
+    $m = [regex]::Match($title, '\((\d{1,4})\+?\)')
+    if ($m.Success) { return [int]$m.Groups[1].Value }
+    return 0
+}
+
+# Chấm đỏ trên icon: tên app -> danh sách chấm (một app có thể hiện ở trang chủ, Dock và trong thư mục).
+$script:BadgeEls = @{}
+$script:FolderKids = @{}
+function New-Badge([string]$name) {
+    $bd = New-Object System.Windows.Controls.Border
+    $bd.Background = ConvertTo-Brush '#FF3B30'
+    $bd.CornerRadius = 13; $bd.MinWidth = 26; $bd.Height = 26; $bd.Padding = '7,0'
+    $bd.HorizontalAlignment = 'Right'; $bd.VerticalAlignment = 'Top'; $bd.Margin = '0,-9,-9,0'
+    $bd.BorderBrush = ConvertTo-Brush '#40000000'; $bd.BorderThickness = 1
+    $bd.Visibility = 'Collapsed'; $bd.IsHitTestVisible = $false
+    $tb = New-Object System.Windows.Controls.TextBlock
+    $tb.FontSize = 13; $tb.FontWeight = 'Bold'; $tb.Foreground = [System.Windows.Media.Brushes]::White
+    $tb.HorizontalAlignment = 'Center'; $tb.VerticalAlignment = 'Center'
+    $bd.Child = $tb
+    if (-not $script:BadgeEls.ContainsKey($name)) { $script:BadgeEls[$name] = New-Object System.Collections.ArrayList }
+    [void]$script:BadgeEls[$name].Add($bd)
+    return $bd
+}
+
+function Update-Badges {
+    if ($script:BadgeEls.Count -eq 0) { return }
+    $map = Get-TileWindowMap
+    $counts = @{}
+    foreach ($k in $map.Keys) { $counts[$k] = Get-TitleCount $map[$k].Title }
+    foreach ($f in $script:FolderKids.Keys) {
+        $sum = 0; foreach ($n in $script:FolderKids[$f]) { if ($counts.ContainsKey($n)) { $sum += $counts[$n] } }
+        $counts["folder:$f"] = $sum
+    }
+    foreach ($name in $script:BadgeEls.Keys) {
+        $c = if ($counts.ContainsKey($name)) { $counts[$name] } else { 0 }
+        foreach ($bd in $script:BadgeEls[$name]) {
+            if ($c -gt 0) { $bd.Child.Text = $(if ($c -gt 999) { '999+' } else { "$c" }); $bd.Visibility = 'Visible' }
+            else { $bd.Visibility = 'Collapsed' }
+        }
+    }
+}
+
+# ---------------------------------------------------------------- Thư mục trên trang chủ (như iPhone)
+function Show-Folder($f) {
+    $ui.FolderTitle.Text = $f.name
+    $ui.FolderGrid.Children.Clear()
+    foreach ($t in $f.children) { [void]$ui.FolderGrid.Children.Add((New-HomeIcon $t 92 $true)) }
+    $ui.FolderOverlay.Visibility = 'Visible'
+    Update-Badges
+}
+function Hide-Folder {
+    if ($ui.FolderOverlay.Visibility -ne 'Visible') { return }
+    $ui.FolderOverlay.Visibility = 'Collapsed'
+    # Bỏ các chấm đỏ của icon trong thư mục vừa đóng.
+    foreach ($b in $ui.FolderGrid.Children) {
+        $n = $b.Tag.name
+        if ($script:BadgeEls.ContainsKey($n)) {
+            foreach ($bd in @($script:BadgeEls[$n])) { if ($b.Content.Children[0].Children -contains $bd) { [void]$script:BadgeEls[$n].Remove($bd) } }
+        }
+    }
+    $ui.FolderGrid.Children.Clear()
+}
+# Chạm ra ngoài khung thư mục thì đóng.
+$ui.FolderOverlay.Add_MouseLeftButtonDown({ param($s, $e) if ($e.OriginalSource -eq $ui.FolderOverlay) { Hide-Folder } })
+
 # ---------------------------------------------------------------- Mở ứng dụng (toàn màn hình, không mở trùng)
 # Cửa sổ app web đã mở sẵn (khớp "match" trong cấu hình) — chạm lại thì chuyển tới, không mở thêm.
 function Find-TileWindow($t) {
     if (-not $t.match -or -not $BrowserName) { return $null }
-    foreach ($w in [TouchLauncher.Native]::GetAppWindows($PID)) {
-        if ($w.Title -match '(Edge|Chrome)$' -or $w.Title -notmatch $t.match) { continue }
-        $p = Get-Process -Id $w.Pid -ErrorAction SilentlyContinue
-        if ($p -and $p.ProcessName -eq $BrowserName) { return $w }
-    }
-    return $null
+    return (Get-TileWindowMap)[$t.name]
 }
 
 # Chờ cửa sổ mới xuất hiện rồi phóng to toàn màn hình như app iPad.
@@ -1073,6 +1185,7 @@ function Watch-NewWindow {
 
 function Invoke-Tile($t) {
     if ($t.type -eq 'drawer') { Show-Apps; return }
+    if ($t.type -eq 'folder') { Show-Folder $t; return }
     if ($t.type -eq 'window') { Switch-ToWindow $t.handle; return }
     $existing = Find-TileWindow $t
     if ($existing) { Switch-ToWindow $existing.Handle; return }
@@ -1081,10 +1194,10 @@ function Invoke-Tile($t) {
     Watch-NewWindow
     switch ($t.type) {
         'app' {
-            if ($Browser) { Start-Browser @("--app=`"$target`"") } else { Start-Process $target }
+            if ($Browser) { Start-Browser @("--app=`"$target`"") ([string]$t.profile) } else { Start-Process $target }
         }
         'web' {
-            if ($Browser) { Start-Browser @("`"$target`"") } else { Start-Process $target }
+            if ($Browser) { Start-Browser @("`"$target`"") ([string]$t.profile) } else { Start-Process $target }
         }
         'shellapp' { Start-Process -FilePath 'explorer.exe' -ArgumentList "shell:AppsFolder\$target" }
         default {
@@ -1101,7 +1214,14 @@ function New-HomeIcon($t, [int]$px, [bool]$label) {
     $b = New-Object System.Windows.Controls.Button
     $b.Style = $win.FindResource('Plain')
     $sp = New-Object System.Windows.Controls.StackPanel
-    [void]$sp.Children.Add((New-Squircle $t $px))
+    $iconBox = New-Object System.Windows.Controls.Grid
+    $iconBox.HorizontalAlignment = 'Center'
+    [void]$iconBox.Children.Add((New-Squircle $t $px))
+    if ($t.name -and $t.type -notin 'drawer', 'window') {
+        $key = if ($t.type -eq 'folder') { "folder:$($t.name)" } else { [string]$t.name }
+        [void]$iconBox.Children.Add((New-Badge $key))
+    }
+    [void]$sp.Children.Add($iconBox)
     if ($label) {
         $b.Width = 132; $b.Margin = '6,8'
         $lb = New-Object System.Windows.Controls.TextBlock
@@ -1171,9 +1291,22 @@ $LibraryTile = [pscustomobject]@{ name = 'Thư viện'; icon = 'E71D'; color = '
 
 function Build-Home {
     $ui.TilePanel.Children.Clear()
+    $script:BadgeEls = @{}
+    $script:FolderKids = @{}
     foreach ($n in $script:Pins) {
         $t = Get-Tile $n
-        if ($t) { $hb = New-HomeIcon $t 92 $true; Register-Hold $hb; [void]$ui.TilePanel.Children.Add($hb) }
+        if (-not $t) { continue }
+        if ($t.folder) {
+            $fname = [string]$t.folder
+            if ($script:FolderKids.ContainsKey($fname)) { continue }
+            $kids = @($script:Pins | ForEach-Object { Get-Tile $_ } | Where-Object { $_ -and $_.folder -eq $fname })
+            $script:FolderKids[$fname] = @($kids | ForEach-Object { $_.name })
+            if ($kids.Count -gt 1) {
+                [void]$ui.TilePanel.Children.Add((New-HomeIcon ([pscustomobject]@{ name = $fname; type = 'folder'; children = $kids }) 92 $true))
+                continue
+            }
+        }
+        $hb = New-HomeIcon $t 92 $true; Register-Hold $hb; [void]$ui.TilePanel.Children.Add($hb)
     }
     [void]$ui.TilePanel.Children.Add((New-HomeIcon $LibraryTile 92 $true))
 
@@ -1184,6 +1317,7 @@ function Build-Home {
         if ($t) { [void]$ui.DockFav.Children.Add((New-HomeIcon $t 68 $false)) }
     }
     Update-DockRecent
+    Update-Badges
 }
 
 # Bên phải Dock: 3 app vừa dùng + Thư viện (như iPad).
@@ -1776,6 +1910,7 @@ function Hide-Switcher {
     $ui.SwitchGrid.Children.Clear()
 }
 function Hide-Overlays {
+    Hide-Folder
     Hide-Switcher
     Hide-Apps
     foreach ($o in 'Overlay', 'PowerOverlay', 'AddOverlay') { $ui[$o].Visibility = 'Collapsed' }
@@ -1976,6 +2111,7 @@ function Test-LauncherForeground {
 function Invoke-NavBack {
     if (Test-LauncherForeground) {
         if ($ui.NightOverlay.Visibility -eq 'Visible') { Exit-Night; return }
+        if ($ui.FolderOverlay.Visibility -eq 'Visible') { Hide-Folder; return }
         foreach ($o in 'PowerOverlay', 'Overlay', 'AddOverlay') { if ($ui[$o].Visibility -eq 'Visible') { $ui[$o].Visibility = 'Collapsed'; return } }
         if ($ui.SwitchOverlay.Visibility -eq 'Visible') { Hide-Switcher; return }
         if ($ui.AppsOverlay.Visibility -eq 'Visible') { Hide-Apps }
@@ -2805,6 +2941,108 @@ $FetchSiteWork = {
     return $res
 }
 
+# ---- Gmail theo tài khoản: mỗi email một icon, mở đúng hộp thư qua mail.google.com/mail/u/<email>/
+$EmailPattern = '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+function Get-GmailTarget([string]$email) { "https://mail.google.com/mail/u/$($email.ToLower())/" }
+function Test-GmailAdded([string]$email) { [bool](@($cfg.tiles | Where-Object { $_.target -eq (Get-GmailTarget $email) }).Count) }
+
+# Tài khoản Gmail đang mở trên máy (đọc từ tiêu đề cửa sổ "... - ten@gmail.com - Gmail").
+function Get-OpenGmailAccounts {
+    @([TouchLauncher.Native]::GetAppWindows($PID) | ForEach-Object {
+        $m = [regex]::Match($_.Title, '([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\s+-\s+Gmail')
+        if ($m.Success) { $m.Groups[1].Value.ToLower() } } | Select-Object -Unique)
+}
+# Tài khoản Google trong các hồ sơ Chrome (chỉ đọc email trên máy, không gửi đi đâu).
+# Mỗi email lấy hồ sơ mà nó là tài khoản chính; nếu không có thì hồ sơ đầu tiên chứa nó.
+function Get-ChromeGoogleAccounts {
+    $ud = Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'
+    $ls = Join-Path $ud 'Local State'
+    if ($BrowserName -ne 'chrome' -or -not (Test-Path $ls)) { return @() }
+    $found = [ordered]@{}
+    try {
+        Add-Type -AssemblyName System.Web.Extensions
+        $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+        $ser.MaxJsonLength = [int]::MaxValue
+        $cache = $ser.DeserializeObject([IO.File]::ReadAllText($ls))['profile']['info_cache']
+        $secondary = @()
+        foreach ($dir in $cache.Keys) {
+            $p = $cache[$dir]
+            $main = if ($p.ContainsKey('user_name')) { ([string]$p['user_name']).ToLower() } else { '' }
+            if ($main -and -not $found.Contains($main)) { $found[$main] = @{ Email = $main; Profile = $dir; ProfileName = [string]$p['name'] } }
+            $pref = Join-Path $ud "$dir\Preferences"
+            if (Test-Path $pref) {
+                try {
+                    $pr = $ser.DeserializeObject([IO.File]::ReadAllText($pref))
+                    if ($pr.ContainsKey('account_info')) {
+                        foreach ($a in $pr['account_info']) {
+                            $e = ([string]$a['email']).ToLower()
+                            if ($e) { $secondary += @{ Email = $e; Profile = $dir; ProfileName = [string]$p['name'] } }
+                        }
+                    }
+                } catch {}
+            }
+        }
+        foreach ($a in $secondary) { if (-not $found.Contains($a.Email)) { $found[$a.Email] = $a } }
+    } catch {}
+    return @($found.Values)
+}
+
+function New-GmailTile([string]$email, [string]$name, [string]$profileDir) {
+    $email = $email.ToLower()
+    if (-not $name) { $name = ($email -split '@')[0] }
+    $base = $name; $i = 2
+    while (Get-Tile $name) { $name = "$base $i"; $i++ }
+    [pscustomobject]@{
+        group = 'Tiện ích'; folder = 'Gmail'; profile = $profileDir; name = $name; icon = 'E715'; color = '#EA4335'; type = 'app'
+        target = (Get-GmailTarget $email); match = ([regex]::Escape($email) + '\s+-\s+Gmail'); user = $true
+    }
+}
+
+# Nhập mọi tài khoản Google chưa có thành icon Gmail (ghim ra trang chủ, gom vào thư mục Gmail).
+function Import-GmailAccounts {
+    $added = @()
+    foreach ($a in Get-ChromeGoogleAccounts) {
+        if (Test-GmailAdded $a.Email) { continue }
+        $tile = New-GmailTile $a.Email $null $a.Profile
+        $cfg.tiles = @(@($cfg.tiles) + $tile)
+        $script:Pins = @($script:Pins) + $tile.name
+        $added += $a.Email
+    }
+    if ($added.Count) {
+        Save-UserApps; Save-Pins
+        if ($null -ne $script:AppItems) { Load-Apps }
+        Build-Home
+    }
+    return $added
+}
+
+function Update-AddSuggest {
+    $ui.AddSuggest.Children.Clear()
+    $chrome = @(Get-ChromeGoogleAccounts | Where-Object { -not (Test-GmailAdded $_.Email) })
+    if ($chrome.Count -gt 1) {
+        $all = New-Object System.Windows.Controls.Button
+        $all.Style = $win.FindResource('Glass')
+        $all.Height = 44; $all.Margin = '0,0,8,8'; $all.Padding = '14,0'; $all.FontSize = 15
+        $all.Background = ConvertTo-Brush '#B3EA4335'
+        $all.Content = "Nhập tất cả Gmail có sẵn ($($chrome.Count))"
+        $all.Add_Click({
+            $added = @(Import-GmailAccounts)
+            $ui.AddOverlay.Visibility = 'Collapsed'
+            Show-Toast $(if ($added.Count) { "Đã thêm $($added.Count) hộp thư vào thư mục Gmail: $($added -join ', ')" } else { 'Các tài khoản đã có sẵn.' })
+        })
+        [void]$ui.AddSuggest.Children.Add($all)
+    }
+    $emails = @(@($chrome | ForEach-Object { $_.Email }) + @(Get-OpenGmailAccounts) | Select-Object -Unique)
+    foreach ($e in @($emails | Where-Object { -not (Test-GmailAdded $_) })) {
+        $b = New-Object System.Windows.Controls.Button
+        $b.Style = $win.FindResource('Glass')
+        $b.Height = 44; $b.Margin = '0,0,8,8'; $b.Padding = '14,0'; $b.FontSize = 15
+        $b.Content = "+ Gmail $e"; $b.Tag = $e
+        $b.Add_Click({ $ui.AddUrl.Text = $this.Tag })
+        [void]$ui.AddSuggest.Children.Add($b)
+    }
+}
+
 function ConvertTo-WebUrl([string]$text) {
     $t = $text.Trim()
     if (-not $t) { return $null }
@@ -2834,8 +3072,9 @@ function Show-AddApp {
     $ui.AddUrl.Text = ''; $ui.AddName.Text = ''
     $ui.AddIcon.Source = $null; $ui.AddLetter.Text = '+'
     $ui.AddPreview.Background = ConvertTo-Brush '#3A3A3C'
-    $ui.AddStatus.Text = 'Nhập địa chỉ, ví dụ chat.zalo.me'
+    $ui.AddStatus.Text = 'Ví dụ: chat.zalo.me hoặc ten@gmail.com'
     Update-AddGroups
+    Update-AddSuggest
     $ui.AddOverlay.Visibility = 'Visible'
     [void]$ui.AddUrl.Focus()
 }
@@ -2845,6 +3084,16 @@ $AddDebounce = New-Object System.Windows.Threading.DispatcherTimer
 $AddDebounce.Interval = [TimeSpan]::FromMilliseconds(900)
 $AddDebounce.Add_Tick({
     $AddDebounce.Stop()
+    $email = $ui.AddUrl.Text.Trim()
+    if ($email -match $EmailPattern) {
+        $script:AddInfo = @{ Email = $email.ToLower(); Url = $null }
+        if (-not $ui.AddName.Text -or $ui.AddName.Tag -eq 'auto') { $ui.AddName.Text = ($email -split '@')[0]; $ui.AddName.Tag = 'auto' }
+        $ui.AddIcon.Source = $null; $ui.AddPreview.Background = New-Gradient '#EA4335'
+        $ui.AddLetter.FontFamily = $IconFont; $ui.AddLetter.Text = [string][char]0xE715
+        $ui.AddStatus.Text = if (Test-GmailAdded $email) { "Hộp thư $email đã có trong Thư viện." } else { "Hộp thư Gmail riêng của $email — nằm trong thư mục Gmail. (Tài khoản cần đăng nhập trong Chrome.)" }
+        return
+    }
+    $ui.AddLetter.FontFamily = $TextFont
     $url = ConvertTo-WebUrl $ui.AddUrl.Text
     if (-not $url) { $ui.AddStatus.Text = 'Địa chỉ chưa hợp lệ.'; return }
     if ($script:AddInfo -and $script:AddInfo.Url -eq $url) { return }
@@ -2871,6 +3120,23 @@ $ui.AddName.Add_TextChanged({ if ($ui.AddName.IsKeyboardFocusWithin) { $ui.AddNa
 $ui.BtnAddApp.Add_Click({ Show-AddApp })
 $ui.BtnAddCancel.Add_Click({ $ui.AddOverlay.Visibility = 'Collapsed' })
 $ui.BtnAddSave.Add_Click({
+    $email = $ui.AddUrl.Text.Trim()
+    if ($email -match $EmailPattern) {
+        $email = $email.ToLower()
+        if (Test-GmailAdded $email) { $ui.AddStatus.Text = "Hộp thư $email đã có rồi."; return }
+        $acct = @(Get-ChromeGoogleAccounts | Where-Object { $_.Email -eq $email })[0]
+        $tile = New-GmailTile $email $ui.AddName.Text.Trim() $(if ($acct) { $acct.Profile } else { $null })
+        $name = $tile.name
+        $cfg.tiles = @(@($cfg.tiles) + $tile)
+        Save-UserApps
+        $script:Pins = @($script:Pins) + $name
+        Save-Pins
+        $ui.AddOverlay.Visibility = 'Collapsed'
+        Load-Apps
+        Build-Home
+        Show-Toast "Đã thêm hộp thư $email vào thư mục Gmail."
+        return
+    }
     $url = ConvertTo-WebUrl $ui.AddUrl.Text
     $name = $ui.AddName.Text.Trim()
     if (-not $url) { $ui.AddStatus.Text = 'Hãy nhập địa chỉ trang web hợp lệ.'; return }
@@ -3048,6 +3314,11 @@ $UpdateDelay = New-Object System.Windows.Threading.DispatcherTimer
 $UpdateDelay.Interval = [TimeSpan]::FromSeconds(15)
 $UpdateDelay.Add_Tick({ $UpdateDelay.Stop(); Start-UpdateCheck })
 
+$GmailImportFlag = Join-Path $PSScriptRoot '.gmail-imported'
+if ((-not $Check -or $env:TL_TEST_IMPORT) -and $cfg.importGmail -ne $false -and -not (Test-Path $GmailImportFlag)) {
+    $script:ImportedGmail = @(Import-GmailAccounts)
+    try { [IO.File]::WriteAllText($GmailImportFlag, (Get-Date).ToString('o')) } catch {}
+}
 Build-Home
 Update-Status
 
@@ -3060,6 +3331,8 @@ if ($Check) {
     "Cửa sổ đang mở: $($open.Count). PiP tìm thấy: $(if (Find-PipWindow) { (Find-PipWindow).Title } else { '(chưa mở YouTube)' })"
     "Màn hình chính: $($ui.TilePanel.Children.Count) icon. Dock: $($ui.DockFav.Children.Count) + $($ui.DockRecent.Children.Count). Bộ sưu tập: $($script:AppItems.Count) app trong $(@($script:Sections).Count) nhóm. Lịch: $($ui.CalTitle.Text), $($ui.CalGrid.Children.Count) ô, $($ui.LunarText.Text). Trung tâm điều khiển: $($CcGrid.Children.Count) nút."
     "Trình duyệt: $Browser."
+    "Tài khoản Google trong Chrome: $(@(Get-ChromeGoogleAccounts | ForEach-Object { "$($_.Email) [$($_.Profile)]" }) -join ', '). Vừa nhập: $(if ($script:ImportedGmail) { @($script:ImportedGmail).Count } else { 0 })."
+    "Thư mục trên trang chủ: $(@($script:FolderKids.Keys | ForEach-Object { "$_ ($(@($script:FolderKids[$_]).Count) app: $($script:FolderKids[$_] -join ', '))" }) -join '; '). Chấm đỏ đang theo dõi: $($script:BadgeEls.Count) icon."
     Update-NowPlaying
     "Đang phát: $(if ($ui.NowCard.Visibility -eq 'Visible') { "$($ui.NowTitle.Text) [$($ui.NowSource.Text)]" } else { '(không có)' }). App tự thêm: $(@($cfg.tiles | Where-Object { $_.user }).Count). Ảnh cho đồng hồ đêm: $(@(Get-NightPhotos).Count)."
     "Rảnh (không chạm): $([TouchLauncher.Native]::IdleSeconds()) giây. Phiên bản: $CurrentVersion$(if ($env:TOUCHLAUNCHER_STANDALONE) { ' (exe một tệp)' })."

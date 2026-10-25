@@ -32,7 +32,7 @@
     { "group": "Mạng xã hội", "name": "X",        "icon": "X",    "color": "#161618", "type": "app", "target": "https://x.com/home", "match": "(^|/ )X$" },
 
     { "group": "Tiện ích", "name": "Lướt web", "icon": "E774", "color": "#0A84FF", "type": "web", "target": "https://www.google.com" },
-    { "group": "Tiện ích", "name": "Gmail",    "icon": "E715", "color": "#EA4335", "type": "app", "target": "https://mail.google.com", "match": "Gmail" },
+    { "group": "Tiện ích", "folder": "Gmail", "name": "Gmail",    "icon": "E715", "color": "#EA4335", "type": "app", "target": "https://mail.google.com", "match": "Gmail" },
     { "group": "Tiện ích", "name": "Lịch",     "icon": "E787", "color": "#1A73E8", "type": "app", "target": "https://calendar.google.com", "match": "(?i)Google Calendar|Lịch Google" },
     { "group": "Tiện ích", "name": "Keep",     "icon": "EA80", "color": "#F5B400", "type": "app", "target": "https://keep.google.com", "match": "(?i)Google Keep" },
     { "group": "Tiện ích", "name": "Shopee",   "icon": "E7BF", "color": "#EE4D2D", "type": "app", "target": "https://shopee.vn", "match": "Shopee" },

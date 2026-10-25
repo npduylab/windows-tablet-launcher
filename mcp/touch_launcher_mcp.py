@@ -175,13 +175,15 @@ def launch_and_maximize(args, maximize=True):
     return None
 
 
-def open_web_app(url, cfg=None):
+def open_web_app(url, cfg=None, profile=None):
     cfg = cfg or load_config()
     browser = find_browser(cfg)
     if not browser:
         os.startfile(url)
         return "Đã mở bằng trình duyệt mặc định."
     args = [browser, f"--app={url}"] + list(cfg.get("browserArgs") or [])
+    if profile:  # app gắn với một hồ sơ Chrome (vd. Gmail của từng tài khoản)
+        args.insert(1, f"--profile-directory={profile}")
     launch_and_maximize(args, cfg.get("appWindowMode") != "normal")
     return f"Đã mở {url}."
 
@@ -270,7 +272,7 @@ def t_open_app(a):
     target = os.path.expandvars(tile.get("target", ""))
     kind = tile.get("type", "app")
     if kind == "app":
-        return open_web_app(target, cfg).replace("Đã mở", f"Đã mở {tile['name']}:", 1)
+        return open_web_app(target, cfg, tile.get("profile")).replace("Đã mở", f"Đã mở {tile['name']}:", 1)
     if kind == "web":
         browser = find_browser(cfg)
         if browser:

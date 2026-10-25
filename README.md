@@ -42,6 +42,9 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 | Vuốt lên về trang chủ | Vạch trắng ở giữa mép dưới (như iPhone/iPad): vuốt lên từ vạch để về trang chủ từ bất kỳ app nào (`homeGesture`) |
 | Thanh điều hướng tự ẩn | 4 giây không chạm thì thu thành vạch nhỏ ở mép; chạm vạch để mở lại (`navBar.autoHide`) |
 | Chạm 2 lần để mở màn hình | **Tắt màn hình** phủ màn đen rồi tắt; chạm nhầm 1 lần không mở, phải chạm 2 lần (hoặc bấm phím). Đồng hồ đêm cũng chạm 2 lần để thoát |
+| Gmail nhiều tài khoản | Tự đọc các tài khoản Google trong hồ sơ Chrome và tạo **một icon Gmail cho mỗi tài khoản**, mở bằng đúng hồ sơ Chrome (luôn đăng nhập sẵn). Thêm sau bằng **+ Thêm app** → gõ email hoặc *Nhập tất cả Gmail có sẵn* (`importGmail`) |
+| Số chưa đọc | Chấm đỏ trên icon từ tiêu đề cửa sổ: Gmail theo từng tài khoản, Facebook, Telegram, X… (cửa sổ app cần đang mở, thu nhỏ cũng được) |
+| Thư mục | App có cùng `"folder"` được gom thành thư mục trên trang chủ (vd. tất cả Gmail), icon thư mục hiện tổng số chưa đọc |
 
 ### Yêu cầu
 - Windows 10 / 11 (tối ưu cho màn hình cảm ứng)
