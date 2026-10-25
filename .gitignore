@@ -3,6 +3,11 @@ pinned.json
 launcher.state.json
 *.bak-*
 
+# Bản build (phát hành qua GitHub Releases, không đưa vào mã nguồn)
+build/
+dist/
+/TouchLauncher.exe
+
 # Python
 __pycache__/
 *.pyc

@@ -40,12 +40,22 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 - Python 3 — chỉ cần nếu dùng MCP cho Claude
 
 ### Cài đặt & chạy
+**Cách nhanh nhất:** tải **[TouchLauncher.exe](https://github.com/npduylab/windows-tablet-launcher/releases/latest/download/TouchLauncher.exe)** (một tệp, khoảng 160 KB), rồi bấm đúp để chạy. Lần đầu chạy, exe tự giải nén vào `%LOCALAPPDATA%\TouchLauncher\app`; cấu hình nằm ở `launcher.config.json` trong thư mục đó. Khi tải bản mới, cấu hình cũ được giữ nguyên.
+> Exe chưa được ký số nên Windows SmartScreen có thể cảnh báo: bấm **More info → Run anyway**. Mã nguồn của exe nằm trong `src/TouchLauncher.cs`, và bạn có thể tự build lại.
+
+**Hoặc chạy từ mã nguồn:**
 1. Tải về: **Code → Download ZIP** rồi giải nén (hoặc `git clone`).
 2. Bấm đúp `ChayLauncher.cmd`.
 3. (Tuỳ chọn) Tạo shortcut ngoài Desktop + tự chạy khi đăng nhập:
    ```powershell
    powershell -ExecutionPolicy Bypass -File CaiDat.ps1 -AutoStart
    ```
+
+**Tự build exe** (dùng trình biên dịch C# có sẵn trong Windows, không cần Visual Studio):
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+Kết quả nằm ở `dist\TouchLauncher.exe`. Nếu chép exe vào cạnh `Launcher.ps1`, exe sẽ chạy bản script trong thư mục đó.
 
 ### Tuỳ chỉnh — `launcher.config.json`
 - `tiles`: các app. `type`: `app` (web dạng ứng dụng) / `web` / `uri` / `exe`; `icon`: mã glyph Segoe Fluent (vd `E8D6`) hoặc một ký tự; `color`, `fg`; `group`: nhóm trong Thư viện; `match`: biểu thức tiêu đề cửa sổ để không mở trùng.
@@ -89,7 +99,9 @@ Runs on the PowerShell + WPF that ship with Windows — **nothing to install** f
 Windows 10/11, Google Chrome (recommended) or Microsoft Edge. Python 3 only for the MCP server.
 
 ### Run
-Download the ZIP (or `git clone`), then double-click `ChayLauncher.cmd`.
+Easiest: download **[TouchLauncher.exe](https://github.com/npduylab/windows-tablet-launcher/releases/latest/download/TouchLauncher.exe)** (single file, ~160 KB) and double-click it. On first run it unpacks to `%LOCALAPPDATA%\TouchLauncher\app` (your config there survives updates). The exe is unsigned, so SmartScreen may warn: **More info → Run anyway**. Build it yourself with `powershell -ExecutionPolicy Bypass -File build.ps1`.
+
+From source: download the ZIP (or `git clone`), then double-click `ChayLauncher.cmd`.
 Optional desktop shortcut + autostart: `powershell -ExecutionPolicy Bypass -File CaiDat.ps1 -AutoStart`.
 
 Everything is configured in `launcher.config.json` (apps, groups, home screen, Dock, browser, nav bar position, PiP position…). The UI is in Vietnamese; app names and labels are plain strings in the config and script, easy to translate.

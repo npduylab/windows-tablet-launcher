@@ -16,14 +16,22 @@ if ($Remove) {
     return
 }
 
+# Có TouchLauncher.exe cạnh script (build.ps1 tạo ra) thì shortcut trỏ thẳng vào exe: có icon riêng, mở nhanh hơn.
+$exe = Join-Path $PSScriptRoot 'TouchLauncher.exe'
+
 $shell = New-Object -ComObject WScript.Shell
 function New-Shortcut([string]$path) {
     $l = $shell.CreateShortcut($path)
-    $l.TargetPath       = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $l.Arguments        = "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$ps1`""
+    if (Test-Path $exe) {
+        $l.TargetPath   = $exe
+        $l.IconLocation = "$exe,0"
+    } else {
+        $l.TargetPath   = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+        $l.Arguments    = "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$ps1`""
+        $l.WindowStyle  = 7   # thu nhỏ, tránh nháy cửa sổ console
+        $l.IconLocation = "$env:WINDIR\System32\shell32.dll,22"
+    }
     $l.WorkingDirectory = $PSScriptRoot
-    $l.WindowStyle      = 7   # thu nhỏ, tránh nháy cửa sổ console
-    $l.IconLocation     = "$env:WINDIR\System32\shell32.dll,22"
     $l.Description      = 'Touch Launcher'
     $l.Save()
 }
