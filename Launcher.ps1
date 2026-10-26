@@ -43,6 +43,37 @@ namespace TouchLauncher {
     [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     public interface IShellItemImageFactory { [PreserveSig] int GetImage(SIZE size, int flags, out IntPtr phbm); }
 
+    // Báo khi một cửa sổ app đang được theo dõi bị đóng. Chỉ nghe sự kiện của đúng tiến trình
+    // trình duyệt chứa cửa sổ đó (không nghe toàn hệ thống) để đỡ tốn pin.
+    public delegate void WinEventDelegate(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    public static class WinWatch {
+        [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventDelegate proc, uint pid, uint tid, uint flags);
+        [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        static readonly WinEventDelegate Proc = OnEvent;          // giữ tham chiếu để không bị thu gom
+        static readonly Dictionary<uint, IntPtr> Hooks = new Dictionary<uint, IntPtr>();
+        static readonly HashSet<long> Tracked = new HashSet<long>();
+        public static Action<long> OnClosed;
+
+        public static void Track(IntPtr hwnd) {
+            if (hwnd == IntPtr.Zero || !Tracked.Add(hwnd.ToInt64())) return;
+            uint pid; GetWindowThreadProcessId(hwnd, out pid);
+            if (pid != 0 && !Hooks.ContainsKey(pid)) {
+                IntPtr h = SetWinEventHook(0x8001, 0x8001, IntPtr.Zero, Proc, pid, 0, 0 /* OUTOFCONTEXT */);  // EVENT_OBJECT_DESTROY
+                if (h != IntPtr.Zero) Hooks[pid] = h;
+            }
+        }
+        public static bool IsTracked(IntPtr hwnd) { return Tracked.Contains(hwnd.ToInt64()); }
+        public static void StopAll() { foreach (var h in Hooks.Values) UnhookWinEvent(h); Hooks.Clear(); Tracked.Clear(); }
+
+        static void OnEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time) {
+            if (idObject != 0 || idChild != 0) return;              // chỉ cửa sổ, không phải đối tượng con
+            if (!Tracked.Remove(hwnd.ToInt64())) return;
+            var cb = OnClosed;
+            if (cb != null) cb(hwnd.ToInt64());
+        }
+    }
+
     // Âm lịch Việt Nam (thuật toán Hồ Ngọc Đức, múi giờ +7).
     public static class Lunar {
         static int INT(double d) { return (int)Math.Floor(d); }
@@ -240,6 +271,26 @@ namespace TouchLauncher {
             if (r == IntPtr.Zero) r = IntPtr.Size == 8 ? GetClassLongPtr64(h, -14) : (IntPtr)GetClassLong32(h, -14);
             if (r == IntPtr.Zero) r = IntPtr.Size == 8 ? GetClassLongPtr64(h, -34) : (IntPtr)GetClassLong32(h, -34);
             return r;
+        }
+
+        [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+        // Đưa cửa sổ lên trước kể cả khi người dùng vừa bấm ở app khác (Windows thường chặn việc này):
+        // tạm gắn vào luồng nhập liệu của cửa sổ đang ở trên cùng rồi mới chuyển.
+        public static void ForceActivate(IntPtr h) {
+            if (IsIconic(h)) ShowWindow(h, 9);
+            IntPtr fg = GetForegroundWindow();
+            uint dummy;
+            uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out dummy);
+            uint me = GetCurrentThreadId();
+            if (fgThread != 0 && fgThread != me) {
+                AttachThreadInput(me, fgThread, true);
+                BringWindowToTop(h); SetForegroundWindow(h);
+                AttachThreadInput(me, fgThread, false);
+            } else {
+                SetForegroundWindow(h);
+            }
         }
 
         public static void Activate(IntPtr h) {
@@ -1098,6 +1149,7 @@ function Get-TileWindowMap {
             }
             if ($script:ProcNames[$w.Pid] -ne $BrowserName) { continue }
             $map[$t.name] = $w; $used[$key] = $true
+            if ($HomeOnClose) { [TouchLauncher.WinWatch]::Track($w.Handle) }   # đã biết là cửa sổ trình duyệt
             break
         }
     }
@@ -1188,6 +1240,7 @@ $LaunchTimer.Add_Tick({
     foreach ($w in [TouchLauncher.Native]::GetAppWindows($PID)) {
         if (-not $lw.Before.Contains($w.Handle.ToInt64())) {
             [TouchLauncher.Native]::Maximize($w.Handle)
+            Add-AppWindowWatch $w.Handle
             $LaunchTimer.Stop(); $script:LaunchWatch = $null
             return
         }
@@ -1934,6 +1987,26 @@ function Hide-Overlays {
     foreach ($o in 'Overlay', 'PowerOverlay', 'AddOverlay') { $ui[$o].Visibility = 'Collapsed' }
 }
 
+# Đóng app web -> về trang chủ launcher (như iPad). Tắt bằng "homeOnAppClose": false.
+$HomeOnClose = $cfg.homeOnAppClose -ne $false
+function Add-AppWindowWatch([IntPtr]$h) {
+    if (-not $HomeOnClose -or $h -eq [IntPtr]::Zero) { return }
+    $p = $null
+    try { $p = (Get-Process -Id ([TouchLauncher.Native]::GetAppWindows(0) | Where-Object { $_.Handle -eq $h } | Select-Object -First 1).Pid -ErrorAction Stop).ProcessName } catch {}
+    if ($p -and $p -eq $BrowserName) { [TouchLauncher.WinWatch]::Track($h) }
+}
+$HomeOnCloseTimer = New-Object System.Windows.Threading.DispatcherTimer
+$HomeOnCloseTimer.Interval = [TimeSpan]::FromMilliseconds(250)   # chờ Windows xong việc đóng cửa sổ
+$HomeOnCloseTimer.Add_Tick({
+    $HomeOnCloseTimer.Stop()
+    if ($script:Split -or $script:AppClosing) { return }             # chia đôi: app còn lại tự phóng to
+    if ($ui.NightOverlay.Visibility -eq 'Visible' -or $blackWin.IsVisible) { return }
+    if (Test-LauncherForeground) { return }
+    if ($win.WindowState -eq 'Minimized') { $win.WindowState = 'Maximized' }
+    if ($script:Hwnd -ne [IntPtr]::Zero) { [TouchLauncher.Native]::ForceActivate($script:Hwnd) }
+})
+[TouchLauncher.WinWatch]::OnClosed = [Action[long]] { param($h) $HomeOnCloseTimer.Stop(); $HomeOnCloseTimer.Start() }
+
 function Show-Launcher {
     if ($win.WindowState -eq 'Minimized') { $win.WindowState = 'Maximized' }
     [void]$win.Activate()
@@ -1942,6 +2015,7 @@ function Show-Launcher {
 
 function Switch-ToWindow([IntPtr]$h) {
     [TouchLauncher.Native]::Activate($h)   # chuyển trước, khi launcher còn giữ quyền foreground
+    Add-AppWindowWatch $h
     Hide-Overlays
     $win.WindowState = 'Minimized'
 }
@@ -3433,6 +3507,7 @@ $win.Add_Deactivated({
 })
 $win.Add_Closed({
     $script:AppClosing = $true
+    [TouchLauncher.WinWatch]::StopAll()
     $nav.Close(); $ccWin.Close(); $splitWin.Close(); $homeBar.Close(); $blackWin.Close(); $flashWin.Close(); $previewWin.Close()
     [TouchLauncher.Native]::KeepDisplayOn($false)
 })

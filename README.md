@@ -39,6 +39,7 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 | Chia đôi màn hình | Đa nhiệm → **Chia đôi** (hoặc Trung tâm điều khiển): 2 app gần nhất cạnh nhau, kéo thanh giữa để đổi tỉ lệ |
 | Đồng hồ đầu giường | Đang sạc + không chạm 5 phút (hoặc bật tay): đồng hồ lớn, lịch âm, ảnh trong Pictures chạy lần lượt |
 | Tự cập nhật | Bản .exe tự kiểm tra bản mới trên GitHub (tối đa 1 lần/ngày), bấm **Cập nhật** là xong |
+| Đóng app là về trang chủ | Đóng cửa sổ một app web (nút ✕) là launcher hiện lên trang chủ, như iPad. Khi đang chia đôi màn hình thì app còn lại phóng to (`homeOnAppClose`) |
 | Vuốt lên về trang chủ | Vạch trắng ở giữa mép dưới (như iPhone/iPad): vuốt lên từ vạch để về trang chủ từ bất kỳ app nào (`homeGesture`) |
 | Thanh điều hướng tự ẩn | 4 giây không chạm thì thu thành vạch nhỏ ở mép; chạm vạch để mở lại. Không thích tự ẩn? Trung tâm điều khiển → **Ghim thanh điều hướng** (lưu ở `settings.user.json`) |
 | Chạm 2 lần để mở màn hình | **Tắt màn hình** phủ màn đen rồi tắt; chạm nhầm 1 lần không mở, phải chạm 2 lần (hoặc bấm phím). Đồng hồ đêm cũng chạm 2 lần để thoát |
