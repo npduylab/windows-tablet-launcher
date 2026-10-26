@@ -339,6 +339,17 @@ try {
 }
 $Utf8NoBom = New-Object Text.UTF8Encoding $false
 
+# Cài đặt chỉnh ngay trong app (vd. ghim thanh điều hướng) — ghi đè cấu hình, cập nhật không mất.
+$settingsPath = Join-Path $PSScriptRoot 'settings.user.json'
+$script:Settings = @{}
+if (Test-Path $settingsPath) {
+    try { (Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $script:Settings[$_.Name] = $_.Value } } catch {}
+}
+function Save-Setting([string]$key, $value) {
+    $script:Settings[$key] = $value
+    try { [IO.File]::WriteAllText($settingsPath, (ConvertTo-Json -InputObject ([pscustomobject]$script:Settings)), (New-Object Text.UTF8Encoding $false)) } catch {}
+}
+
 # App người dùng tự thêm (nút "+ Thêm app"): lưu riêng để cập nhật launcher không làm mất.
 $userAppsPath = Join-Path $PSScriptRoot 'apps.user.json'
 $IconDir      = Join-Path $PSScriptRoot 'icons'
@@ -2189,7 +2200,8 @@ $navXaml = @'
 $NavEnabled = -not ($cfg.navBar -and $cfg.navBar.enabled -eq $false)
 $NavPos     = if ($cfg.navBar.position) { [string]$cfg.navBar.position } else { 'right' }
 $NavIdle    = if ($cfg.navBar.opacity) { [double]$cfg.navBar.opacity } else { 0.6 }
-$NavAutoHide = -not ($cfg.navBar -and $cfg.navBar.autoHide -eq $false)
+$script:NavAutoHide = if ($script:Settings.ContainsKey('navAutoHide')) { [bool]$script:Settings['navAutoHide'] }
+                      else { -not ($cfg.navBar -and $cfg.navBar.autoHide -eq $false) }
 
 $nav = [Windows.Markup.XamlReader]::Parse($navXaml)
 $NavPanel = $nav.FindName('NavPanel'); $NavHandle = $nav.FindName('NavHandle'); $NavPill = $nav.FindName('NavPill')
@@ -2220,14 +2232,23 @@ function Expand-Nav {
     $nav.UpdateLayout(); Set-NavPosition
     $NavFade.Stop(); $NavFade.Start()
 }
+# Ghim (luôn hiện) / bỏ ghim (tự ẩn) thanh điều hướng — lưu lại cho lần mở sau.
+function Switch-NavPin {
+    $script:NavAutoHide = -not $script:NavAutoHide
+    Save-Setting 'navAutoHide' $script:NavAutoHide
+    $NavFade.Interval = [TimeSpan]::FromSeconds($(if ($script:NavAutoHide) { 4 } else { 2.5 }))
+    Expand-Nav
+    Show-CcToast $(if ($script:NavAutoHide) { 'Thanh điều hướng sẽ tự ẩn sau 4 giây không chạm.' } else { 'Đã ghim thanh điều hướng: luôn hiện.' })
+}
+
 function Collapse-Nav {
-    if (-not $NavAutoHide) { $nav.Opacity = $NavIdle; return }
+    if (-not $script:NavAutoHide) { $nav.Opacity = $NavIdle; return }
     $NavPanel.Visibility = 'Collapsed'; $NavHandle.Visibility = 'Visible'
     $nav.Opacity = 1
     $nav.UpdateLayout(); Set-NavPosition
 }
 $NavFade = New-Object System.Windows.Threading.DispatcherTimer
-$NavFade.Interval = [TimeSpan]::FromSeconds($(if ($NavAutoHide) { 4 } else { 2.5 }))
+$NavFade.Interval = [TimeSpan]::FromSeconds($(if ($script:NavAutoHide) { 4 } else { 2.5 }))
 $NavFade.Add_Tick({ $NavFade.Stop(); Collapse-Nav })
 # Chạm vạch: chỉ mở thanh (không để cú chạm đi tiếp xuống nút nào).
 $nav.Add_PreviewTouchDown({ param($s, $e) if ($NavHandle.Visibility -eq 'Visible') { Expand-Nav; $e.Handled = $true } else { $NavFade.Stop(); $NavFade.Start() } })
@@ -2545,6 +2566,7 @@ $ccDefs = @(
     @{ N = 'Night';     G = 0xE823; L = 'Đồng hồ';         A = { Hide-CC; Show-Launcher; Enter-Night $false } }
     @{ N = 'Shot';      G = 0xE722; L = 'Chụp màn hình';   A = { Start-ScreenShot } }
     @{ N = 'Clip';      G = 0xE8C6; L = 'Chụp một vùng';   A = { Start-ScreenClip } }
+    @{ N = 'NavPin';    G = 0xE718; L = 'Ghim thanh điều hướng'; A = { Switch-NavPin } }
     @{ N = 'Notify';    G = 0xEA8F; L = 'Thông báo';       A = { Hide-CC; Open-NotificationCenter } }
     @{ N = 'Clean';     G = 0xE74D; L = 'Dọn dẹp';         A = { Hide-CC; Hide-Overlays; Show-Launcher; Show-CleanPanel } }
     @{ N = 'Power';     G = 0xE7E8; L = 'Nguồn';           A = { Hide-CC; Hide-Overlays; Show-Launcher; Show-PowerMenu } }
@@ -2569,6 +2591,8 @@ foreach ($d in $ccDefs) {
     $cc[$d.N] = @{ Button = $b; Label = $lb }
 }
 
+if (-not $NavEnabled) { $cc.NavPin.Button.Visibility = 'Collapsed' }
+
 # Thông báo khi launcher đang ẩn: hiện ngay trên tiêu đề Trung tâm điều khiển.
 function Show-CcToast([string]$msg) { if ($ccWin.IsVisible) { $CcBattery.Text = $msg } else { Show-Toast $msg } }
 
@@ -2583,6 +2607,7 @@ function Update-CC {
     $cc.Sleep.Label.Text = if ($left -gt 0) { "Tắt sau $left phút" } else { 'Hẹn giờ tắt' }
     $cc.Sleep.Button.Background = ConvertTo-Brush $(if ($left -gt 0) { '#FF9F0A' } else { '#3A3A3C' })
     $cc.Split.Button.Background = ConvertTo-Brush $(if ($script:Split) { '#0A84FF' } else { '#3A3A3C' })
+    $cc.NavPin.Button.Background = ConvertTo-Brush $(if (-not $script:NavAutoHide) { '#0A84FF' } else { '#3A3A3C' })
 }
 
 # Tự đóng sau 8 giây không chạm.
@@ -3448,6 +3473,7 @@ if ($Check) {
     "Cửa sổ đang mở: $($open.Count). PiP tìm thấy: $(if (Find-PipWindow) { (Find-PipWindow).Title } else { '(chưa mở YouTube)' })"
     "Màn hình chính: $($ui.TilePanel.Children.Count) icon. Dock: $($ui.DockFav.Children.Count) + $($ui.DockRecent.Children.Count). Bộ sưu tập: $($script:AppItems.Count) app trong $(@($script:Sections).Count) nhóm. Lịch: $($ui.CalTitle.Text), $($ui.CalGrid.Children.Count) ô, $($ui.LunarText.Text). Trung tâm điều khiển: $($CcGrid.Children.Count) nút."
     "Trình duyệt: $Browser."
+    "Thanh điều hướng: $(if ($script:NavAutoHide) { 'tự ẩn' } else { 'luôn hiện (đã ghim)' })."
     "Hồ sơ Chrome chính cho các app: $(if ($MainProfile) { $MainProfile } else { '(theo Chrome)' })."
     "Tài khoản Google trong Chrome: $(@(Get-ChromeGoogleAccounts | ForEach-Object { "$($_.Email) [$($_.Profile)]" }) -join ', '). Vừa nhập: $(if ($script:ImportedGmail) { @($script:ImportedGmail).Count } else { 0 })."
     "Thư mục trên trang chủ: $(@($script:FolderKids.Keys | ForEach-Object { "$_ ($(@($script:FolderKids[$_]).Count) app: $($script:FolderKids[$_] -join ', '))" }) -join '; '). Chấm đỏ đang theo dõi: $($script:BadgeEls.Count) icon."

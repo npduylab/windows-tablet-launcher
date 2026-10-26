@@ -40,7 +40,7 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 | Đồng hồ đầu giường | Đang sạc + không chạm 5 phút (hoặc bật tay): đồng hồ lớn, lịch âm, ảnh trong Pictures chạy lần lượt |
 | Tự cập nhật | Bản .exe tự kiểm tra bản mới trên GitHub (tối đa 1 lần/ngày), bấm **Cập nhật** là xong |
 | Vuốt lên về trang chủ | Vạch trắng ở giữa mép dưới (như iPhone/iPad): vuốt lên từ vạch để về trang chủ từ bất kỳ app nào (`homeGesture`) |
-| Thanh điều hướng tự ẩn | 4 giây không chạm thì thu thành vạch nhỏ ở mép; chạm vạch để mở lại (`navBar.autoHide`) |
+| Thanh điều hướng tự ẩn | 4 giây không chạm thì thu thành vạch nhỏ ở mép; chạm vạch để mở lại. Không thích tự ẩn? Trung tâm điều khiển → **Ghim thanh điều hướng** (lưu ở `settings.user.json`) |
 | Chạm 2 lần để mở màn hình | **Tắt màn hình** phủ màn đen rồi tắt; chạm nhầm 1 lần không mở, phải chạm 2 lần (hoặc bấm phím). Đồng hồ đêm cũng chạm 2 lần để thoát |
 | Gmail nhiều tài khoản | Tự đọc các tài khoản Google trong hồ sơ Chrome và tạo **một icon Gmail cho mỗi tài khoản**, mở bằng đúng hồ sơ Chrome (luôn đăng nhập sẵn). Thêm sau bằng **+ Thêm app** → gõ email hoặc *Nhập tất cả Gmail có sẵn* (`importGmail`) |
 | Số chưa đọc | Chấm đỏ trên icon từ tiêu đề cửa sổ: Gmail theo từng tài khoản, Facebook, Telegram, X… (cửa sổ app cần đang mở, thu nhỏ cũng được) |

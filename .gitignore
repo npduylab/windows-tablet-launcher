@@ -21,3 +21,6 @@ icons/
 
 # Đánh dấu đã nhập Gmail từ Chrome (riêng từng máy)
 .gmail-imported
+
+# Cài đặt chỉnh trong app (riêng từng máy)
+settings.user.json
