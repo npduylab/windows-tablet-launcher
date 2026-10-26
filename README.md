@@ -45,6 +45,7 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 | Gmail nhiều tài khoản | Tự đọc các tài khoản Google trong hồ sơ Chrome và tạo **một icon Gmail cho mỗi tài khoản**, mở bằng đúng hồ sơ Chrome (luôn đăng nhập sẵn). Thêm sau bằng **+ Thêm app** → gõ email hoặc *Nhập tất cả Gmail có sẵn* (`importGmail`) |
 | Số chưa đọc | Chấm đỏ trên icon từ tiêu đề cửa sổ: Gmail theo từng tài khoản, Facebook, Telegram, X… (cửa sổ app cần đang mở, thu nhỏ cũng được) |
 | Thư mục | App có cùng `"folder"` được gom thành thư mục trên trang chủ (vd. tất cả Gmail), icon thư mục hiện tổng số chưa đọc |
+| Chụp màn hình | Trung tâm điều khiển → **Chụp màn hình**: tự ẩn các lớp nổi, nháy trắng, lưu vào `Pictures\Screenshots`, chép vào clipboard, ảnh xem trước ở góc (chạm để mở). **Chụp một vùng** dùng công cụ cắt của Windows. Khung ảnh đêm không chiếu ảnh chụp màn hình |
 
 ### Yêu cầu
 - Windows 10 / 11 (tối ưu cho màn hình cảm ứng)
@@ -54,6 +55,8 @@ Chỉ cần PowerShell + WPF có sẵn trong Windows — **không cài thêm gì
 ### Cài đặt & chạy
 **Cách nhanh nhất:** tải **[TouchLauncher.exe](https://github.com/npduylab/windows-tablet-launcher/releases/latest/download/TouchLauncher.exe)** (một tệp, khoảng 160 KB), rồi bấm đúp để chạy. Lần đầu chạy, exe tự giải nén vào `%LOCALAPPDATA%\TouchLauncher\app`; cấu hình nằm ở `launcher.config.json` trong thư mục đó. Khi tải bản mới, cấu hình cũ được giữ nguyên.
 > Exe chưa được ký số nên Windows SmartScreen có thể cảnh báo: bấm **More info → Run anyway**. Mã nguồn của exe nằm trong `src/TouchLauncher.cs`, và bạn có thể tự build lại.
+>
+> ⚠️ **Windows 11 có bật Smart App Control?** Khi đó Windows chặn hẳn exe chưa ký số (báo *"An Application Control policy has blocked this file"*, không có nút chạy tiếp). Hãy dùng cách **chạy từ mã nguồn** bên dưới: script PowerShell không bị chặn, và `ChayLauncher.cmd` / `CaiDat.ps1` tự chọn script khi Smart App Control đang bật.
 
 **Hoặc chạy từ mã nguồn:**
 1. Tải về: **Code → Download ZIP** rồi giải nén (hoặc `git clone`).
@@ -80,7 +83,7 @@ Kết quả nằm ở `dist\TouchLauncher.exe`. Nếu chép exe vào cạnh `Lau
 - `updateCheck`: `false` để tắt tự kiểm tra bản mới.
 
 ### Claude điều khiển máy (MCP)
-`mcp/touch_launcher_mcp.py` là MCP server dùng thư viện chuẩn Python (không cần `pip`). Công cụ: `list_apps`, `open_app`, `search` (Google/YouTube/YouTube Music/Maps/Shopee), `open_url`, `media` (phát/dừng, bài, âm lượng), `set_brightness`, `get_status` (pin, giờ, cửa sổ), `list_windows`, `switch_window`, `close_window`, `go_home`, `open_notifications`.
+`mcp/touch_launcher_mcp.py` là MCP server dùng thư viện chuẩn Python (không cần `pip`). Công cụ: `list_apps`, `open_app`, `search` (Google/YouTube/YouTube Music/Maps/Shopee), `open_url`, `media` (phát/dừng, bài, âm lượng), `set_brightness`, `get_status` (pin, giờ, cửa sổ), `list_windows`, `switch_window`, `close_window`, `go_home`, `open_notifications`, `take_screenshot` (Claude xem được màn hình khi bạn hỏi).
 
 Đăng ký với Claude Desktop (có sao lưu cấu hình cũ):
 ```powershell
@@ -116,6 +119,8 @@ Runs on the PowerShell + WPF that ship with Windows — **nothing to install** f
 Windows 10/11, Google Chrome (recommended) or Microsoft Edge. Python 3 only for the MCP server.
 
 ### Run
+**Windows 11 with Smart App Control on** blocks unsigned exes outright ("An Application Control policy has blocked this file") — use the source ZIP + `ChayLauncher.cmd` instead; it detects Smart App Control and runs the script.
+
 Easiest: download **[TouchLauncher.exe](https://github.com/npduylab/windows-tablet-launcher/releases/latest/download/TouchLauncher.exe)** (single file, ~160 KB) and double-click it. On first run it unpacks to `%LOCALAPPDATA%\TouchLauncher\app` (your config there survives updates). The exe is unsigned, so SmartScreen may warn: **More info → Run anyway**. Build it yourself with `powershell -ExecutionPolicy Bypass -File build.ps1`.
 
 From source: download the ZIP (or `git clone`), then double-click `ChayLauncher.cmd`.

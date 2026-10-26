@@ -38,7 +38,7 @@ def main():
 
     check(replies.get(1, {}).get("result", {}).get("serverInfo", {}).get("name") == "touch-launcher", "initialize")
     tools = [t["name"] for t in replies.get(2, {}).get("result", {}).get("tools", [])]
-    check({"list_apps", "open_app", "search", "media", "get_status"} <= set(tools), f"tools/list thiếu công cụ: {tools}")
+    check({"list_apps", "open_app", "search", "media", "get_status", "take_screenshot"} <= set(tools), f"tools/list thiếu công cụ: {tools}")
     check(not replies[3]["result"]["isError"] and "YouTube" in replies[3]["result"]["content"][0]["text"], "list_apps")
     check(not replies[4]["result"]["isError"], "get_status")
     check(replies[5]["result"]["isError"], "open_app với tên sai phải trả về lỗi")

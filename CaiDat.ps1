@@ -17,7 +17,13 @@ if ($Remove) {
 }
 
 # Có TouchLauncher.exe cạnh script (build.ps1 tạo ra) thì shortcut trỏ thẳng vào exe: có icon riêng, mở nhanh hơn.
+# Riêng khi Smart App Control (Windows 11) đang bật: exe chưa ký số bị chặn, nên dùng script.
 $exe = Join-Path $PSScriptRoot 'TouchLauncher.exe'
+$sac = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -ErrorAction SilentlyContinue).VerifiedAndReputablePolicyState
+if ($sac -eq 1 -and (Test-Path $exe)) {
+    'Smart App Control đang bật: shortcut sẽ chạy bằng script PowerShell (exe chưa ký số bị Windows chặn).'
+    $exe = Join-Path $PSScriptRoot '__khong_dung_exe__'
+}
 
 $shell = New-Object -ComObject WScript.Shell
 function New-Shortcut([string]$path) {

@@ -2364,6 +2364,113 @@ $blackWin.Add_PreviewKeyDown({ param($s, $e) $e.Handled = $true; Exit-ScreenOff 
 # Không cho đóng bằng Alt+F4 (chỉ ẩn).
 $blackWin.Add_Closing({ param($s, $e) if (-not $script:AppClosing) { $e.Cancel = $true; Exit-ScreenOff } })
 
+# ---------------------------------------------------------------- Chụp màn hình
+# Ẩn các lớp nổi của launcher, chụp toàn bộ màn hình, lưu vào Pictures\Screenshots, chép vào clipboard,
+# nháy trắng và hiện ảnh xem trước ở góc như iPhone (chạm để mở ảnh).
+$ShotDir = if ($cfg.screenshotFolder) { [Environment]::ExpandEnvironmentVariables([string]$cfg.screenshotFolder) }
+           else { Join-Path ([Environment]::GetFolderPath('MyPictures')) 'Screenshots' }
+
+$flashXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        Title="Touch Launcher Flash" WindowStyle="None" AllowsTransparency="True" Background="White" Opacity="0"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize" IsHitTestVisible="False"/>
+'@
+$flashWin = [Windows.Markup.XamlReader]::Parse($flashXaml)
+$flashWin.Add_SourceInitialized({ [TouchLauncher.Native]::MakeNoActivate((New-Object System.Windows.Interop.WindowInteropHelper $flashWin).Handle) })
+
+$previewXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Touch Launcher Screenshot" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize" SizeToContent="WidthAndHeight"
+        Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" Stylus.IsTapFeedbackEnabled="False">
+  <Border x:Name="PvCard" Background="#F21C1C1E" CornerRadius="18" Padding="8" BorderBrush="#66FFFFFF" BorderThickness="1" Cursor="Hand">
+    <StackPanel>
+      <Border CornerRadius="12" ClipToBounds="True">
+        <Image x:Name="PvImage" Width="240" Stretch="Uniform"/>
+      </Border>
+      <TextBlock x:Name="PvText" Foreground="White" FontFamily="Segoe UI" FontSize="14" Margin="4,8,4,2" TextWrapping="Wrap" MaxWidth="240"/>
+    </StackPanel>
+  </Border>
+</Window>
+'@
+$previewWin = [Windows.Markup.XamlReader]::Parse($previewXaml)
+$previewWin.Add_SourceInitialized({ [TouchLauncher.Native]::MakeNoActivate((New-Object System.Windows.Interop.WindowInteropHelper $previewWin).Handle) })
+$PvImage = $previewWin.FindName('PvImage'); $PvText = $previewWin.FindName('PvText')
+$script:LastShot = $null
+
+$PreviewHide = New-Object System.Windows.Threading.DispatcherTimer
+$PreviewHide.Interval = [TimeSpan]::FromSeconds(5)
+$PreviewHide.Add_Tick({ $PreviewHide.Stop(); $previewWin.Hide(); $PvImage.Source = $null })
+$previewWin.FindName('PvCard').Add_MouseLeftButtonUp({
+    $PreviewHide.Stop(); $previewWin.Hide()
+    if ($script:LastShot -and (Test-Path $script:LastShot)) { Start-Process $script:LastShot }
+})
+
+function Save-ScreenShot {
+    $vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    $bmp = New-Object System.Drawing.Bitmap $vs.Width, $vs.Height
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    try { $g.CopyFromScreen($vs.Left, $vs.Top, 0, 0, $bmp.Size) } finally { $g.Dispose() }
+    [void](New-Item -ItemType Directory -Force -Path $ShotDir)
+    $path = Join-Path $ShotDir ('Ảnh chụp màn hình {0:yyyy-MM-dd HHmmss}.png' -f (Get-Date))
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    return $path
+}
+
+# Bước 1: ẩn các lớp nổi; bước 2 (sau 350 ms, khi màn hình đã vẽ lại): chụp.
+$script:ShotRestore = $null
+$ShotTimer = New-Object System.Windows.Threading.DispatcherTimer
+$ShotTimer.Interval = [TimeSpan]::FromMilliseconds(350)
+$ShotTimer.Add_Tick({
+    $ShotTimer.Stop()
+    $path = $null
+    try { $path = Save-ScreenShot } catch { Show-CcToast "Không chụp được màn hình: $($_.Exception.Message)" }
+    foreach ($w in $script:ShotRestore) { $w.Show() }
+    if (-not $path) { return }
+    $script:LastShot = $path
+
+    $img = New-Object System.Windows.Media.Imaging.BitmapImage
+    $img.BeginInit(); $img.UriSource = [Uri]$path; $img.DecodePixelWidth = 480; $img.CacheOption = 'OnLoad'; $img.EndInit(); $img.Freeze()
+    try {
+        $full = New-Object System.Windows.Media.Imaging.BitmapImage
+        $full.BeginInit(); $full.UriSource = [Uri]$path; $full.CacheOption = 'OnLoad'; $full.EndInit(); $full.Freeze()
+        [System.Windows.Clipboard]::SetImage($full)
+    } catch {}
+
+    # Nháy trắng toàn màn hình.
+    $flashWin.Left = [System.Windows.SystemParameters]::VirtualScreenLeft; $flashWin.Top = [System.Windows.SystemParameters]::VirtualScreenTop
+    $flashWin.Width = [System.Windows.SystemParameters]::VirtualScreenWidth; $flashWin.Height = [System.Windows.SystemParameters]::VirtualScreenHeight
+    $flashWin.Show()
+    $flashWin.BeginAnimation([System.Windows.Window]::OpacityProperty,
+        (New-Object System.Windows.Media.Animation.DoubleAnimation(0.85, 0, (New-Object System.Windows.Duration ([TimeSpan]::FromMilliseconds(320))))))
+
+    # Ảnh xem trước ở góc trái dưới.
+    $PvImage.Source = $img
+    $PvText.Text = "Đã lưu vào $([IO.Path]::GetFileName($ShotDir)) và chép vào clipboard · chạm để mở"
+    $wa = [System.Windows.SystemParameters]::WorkArea
+    $previewWin.Show()
+    $previewWin.UpdateLayout()
+    $previewWin.Left = $wa.Left + 20
+    $previewWin.Top = $wa.Bottom - $previewWin.ActualHeight - 40
+    $PreviewHide.Stop(); $PreviewHide.Start()
+})
+$FlashHide = New-Object System.Windows.Threading.DispatcherTimer
+$FlashHide.Interval = [TimeSpan]::FromMilliseconds(400)
+$flashWin.Add_IsVisibleChanged({ if ($flashWin.IsVisible) { $FlashHide.Stop(); $FlashHide.Start() } })
+$FlashHide.Add_Tick({ $FlashHide.Stop(); $flashWin.Hide() })
+
+function Start-ScreenShot {
+    Hide-CC
+    $previewWin.Hide()
+    $script:ShotRestore = @($nav, $homeBar | Where-Object { $_.IsVisible })
+    foreach ($w in $script:ShotRestore) { $w.Hide() }
+    $ShotTimer.Stop(); $ShotTimer.Start()
+}
+# Chụp một vùng: công cụ cắt vùng có sẵn của Windows (ảnh vào clipboard).
+function Start-ScreenClip { Hide-CC; try { Start-Process 'ms-screenclip:' } catch { Show-Toast 'Không mở được công cụ cắt vùng của Windows.' } }
+
 # ---------------------------------------------------------------- Trung tâm điều khiển (nổi trên mọi app)
 $ccXaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -2436,6 +2543,8 @@ $ccDefs = @(
     @{ N = 'Sleep';     G = 0xE916; L = 'Hẹn giờ tắt';     A = { Switch-SleepTimer } }
     @{ N = 'Split';     G = 0xE90C; L = 'Chia đôi';        A = { Hide-CC; Start-SplitView } }
     @{ N = 'Night';     G = 0xE823; L = 'Đồng hồ';         A = { Hide-CC; Show-Launcher; Enter-Night $false } }
+    @{ N = 'Shot';      G = 0xE722; L = 'Chụp màn hình';   A = { Start-ScreenShot } }
+    @{ N = 'Clip';      G = 0xE8C6; L = 'Chụp một vùng';   A = { Start-ScreenClip } }
     @{ N = 'Notify';    G = 0xEA8F; L = 'Thông báo';       A = { Hide-CC; Open-NotificationCenter } }
     @{ N = 'Clean';     G = 0xE74D; L = 'Dọn dẹp';         A = { Hide-CC; Hide-Overlays; Show-Launcher; Show-CleanPanel } }
     @{ N = 'Power';     G = 0xE7E8; L = 'Nguồn';           A = { Hide-CC; Hide-Overlays; Show-Launcher; Show-PowerMenu } }
@@ -2785,7 +2894,8 @@ function Get-NightPhotos {
     $files = @()
     if ($dir -and (Test-Path $dir)) {
         $files = @(Get-ChildItem -Path $dir -Recurse -Depth 2 -File -Include *.jpg, *.jpeg, *.png -ErrorAction SilentlyContinue |
-                   Where-Object { $_.Length -gt 30KB } | Select-Object -First 400 | ForEach-Object { $_.FullName })
+                   Where-Object { $_.Length -gt 30KB -and $_.FullName -notmatch '\\Screenshots\\' -and -not $_.FullName.StartsWith($ShotDir) } |
+                   Select-Object -First 400 | ForEach-Object { $_.FullName })
     }
     $script:NightPhotos = @($files | Sort-Object { Get-Random })
     return $script:NightPhotos
@@ -3298,7 +3408,7 @@ $win.Add_Deactivated({
 })
 $win.Add_Closed({
     $script:AppClosing = $true
-    $nav.Close(); $ccWin.Close(); $splitWin.Close(); $homeBar.Close(); $blackWin.Close()
+    $nav.Close(); $ccWin.Close(); $splitWin.Close(); $homeBar.Close(); $blackWin.Close(); $flashWin.Close(); $previewWin.Close()
     [TouchLauncher.Native]::KeepDisplayOn($false)
 })
 $win.Add_ContentRendered({

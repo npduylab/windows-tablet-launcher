@@ -399,6 +399,75 @@ def t_go_home(_):
     return "Launcher chưa chạy — đã khởi động launcher."
 
 
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [("biSize", wt.DWORD), ("biWidth", wt.LONG), ("biHeight", wt.LONG), ("biPlanes", wt.WORD),
+                ("biBitCount", wt.WORD), ("biCompression", wt.DWORD), ("biSizeImage", wt.DWORD),
+                ("biXPelsPerMeter", wt.LONG), ("biYPelsPerMeter", wt.LONG), ("biClrUsed", wt.DWORD), ("biClrImportant", wt.DWORD)]
+
+
+def capture_screen_png(max_width):
+    """Chụp toàn màn hình bằng GDI, thu nhỏ khi chụp (StretchBlt), mã hóa PNG bằng zlib."""
+    import struct
+    import zlib
+    gdi32 = ctypes.WinDLL("gdi32")
+    user32.SetProcessDPIAware()
+    vx, vy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
+    vw, vh = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
+    w = min(max_width, vw)
+    h = max(1, round(vh * w / vw))
+    user32.GetDC.restype = wt.HDC
+    user32.GetDC.argtypes = [wt.HWND]
+    user32.ReleaseDC.argtypes = [wt.HWND, wt.HDC]
+    gdi32.CreateCompatibleDC.restype = wt.HDC
+    gdi32.CreateCompatibleDC.argtypes = [wt.HDC]
+    gdi32.CreateCompatibleBitmap.argtypes = [wt.HDC, ctypes.c_int, ctypes.c_int]
+    gdi32.SetStretchBltMode.argtypes = [wt.HDC, ctypes.c_int]
+    gdi32.DeleteObject.argtypes = [wt.HGDIOBJ]
+    gdi32.DeleteDC.argtypes = [wt.HDC]
+    gdi32.CreateCompatibleBitmap.restype = wt.HBITMAP
+    gdi32.SelectObject.restype = wt.HGDIOBJ
+    gdi32.SelectObject.argtypes = [wt.HDC, wt.HGDIOBJ]
+    gdi32.StretchBlt.argtypes = [wt.HDC] + [ctypes.c_int] * 4 + [wt.HDC] + [ctypes.c_int] * 4 + [wt.DWORD]
+    gdi32.GetDIBits.argtypes = [wt.HDC, wt.HBITMAP, wt.UINT, wt.UINT, ctypes.c_void_p, ctypes.c_void_p, wt.UINT]
+    screen = user32.GetDC(None)
+    mem = gdi32.CreateCompatibleDC(screen)
+    bmp = gdi32.CreateCompatibleBitmap(screen, w, h)
+    old = gdi32.SelectObject(mem, bmp)
+    try:
+        gdi32.SetStretchBltMode(mem, 4)  # HALFTONE: thu nhỏ mịn
+        gdi32.StretchBlt(mem, 0, 0, w, h, screen, vx, vy, vw, vh, 0x00CC0020 | 0x40000000)  # SRCCOPY | CAPTUREBLT
+        bi = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = ctypes.create_string_buffer(w * h * 4)
+        gdi32.GetDIBits(mem, bmp, 0, h, buf, ctypes.byref(bi), 0)
+    finally:
+        gdi32.SelectObject(mem, old)
+        gdi32.DeleteObject(bmp)
+        gdi32.DeleteDC(mem)
+        user32.ReleaseDC(None, screen)
+    bgra = buf.raw
+    rgb = bytearray(w * h * 3)
+    rgb[0::3], rgb[1::3], rgb[2::3] = bgra[2::4], bgra[1::4], bgra[0::4]
+    stride = w * 3
+    raw = b"".join(b"\x00" + bytes(rgb[y * stride:(y + 1) * stride]) for y in range(h))
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+    return png, (vw, vh), w
+
+
+def t_take_screenshot(a):
+    import base64
+    max_w = max(480, min(int(a.get("max_width", 1024)), 1920))
+    png, (vw, vh), w = capture_screen_png(max_w)
+    # Trả ảnh thẳng cho Claude xem (không lưu ra tệp).
+    return {"content": [
+        {"type": "image", "data": base64.b64encode(png).decode("ascii"), "mimeType": "image/png"},
+        {"type": "text", "text": f"Ảnh chụp màn hình lúc {datetime.datetime.now():%H:%M:%S} (màn hình {vw}x{vh}, thu nhỏ còn rộng {w}px)."},
+    ]}
+
+
 def t_notifications(_):
     user32.keybd_event(0x5B, 0, 1, 0)
     user32.keybd_event(0x4E, 0, 0, 0)
@@ -445,6 +514,11 @@ TOOLS = [
     {"name": "go_home", "fn": t_go_home,
      "description": "Show the Touch Launcher home screen (starts the launcher if it is not running).",
      "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "take_screenshot", "fn": t_take_screenshot,
+     "description": "Take a screenshot of the whole tablet screen and return it as an image so you can see what is on it. "
+                    "It shows everything visible, including private messages — only use it when the user asks about the screen.",
+     "inputSchema": {"type": "object", "properties": {
+         "max_width": {"type": "integer", "minimum": 480, "maximum": 1920, "description": "Downscale to this width (default 1024)"}}}},
     {"name": "open_notifications", "fn": t_notifications,
      "description": "Open the Windows notification center and calendar.",
      "inputSchema": {"type": "object", "properties": {}}},
@@ -472,10 +546,11 @@ def handle(msg):
         if not tool:
             return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"Unknown tool: {params.get('name')}"}}
         try:
-            text, is_error = tool["fn"](params.get("arguments") or {}), False
+            out, is_error = tool["fn"](params.get("arguments") or {}), False
         except Exception as e:  # lỗi công cụ trả về cho Claude đọc, không làm sập server
-            text, is_error = f"Lỗi: {e}", True
-        result = {"content": [{"type": "text", "text": text}], "isError": is_error}
+            out, is_error = f"Lỗi: {e}", True
+        content = out["content"] if isinstance(out, dict) else [{"type": "text", "text": out}]
+        result = {"content": content, "isError": is_error}
     elif mid is None:
         return None  # notification (vd. notifications/initialized)
     else:

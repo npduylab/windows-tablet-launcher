@@ -171,8 +171,8 @@
       </a>
     </div>
     <p class="note">
-      <span lang="vi">Windows 10 / 11 · Một tệp ~160 KB · Giấy phép MIT · <a href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">Tải mã nguồn (ZIP)</a></span>
-      <span lang="en">Windows 10 / 11 · Single ~160 KB file · MIT license · <a href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">Source (ZIP)</a></span>
+      <span lang="vi">Windows 10 / 11 · Giấy phép MIT · Windows báo "Application Control policy has blocked"? <a href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">Tải bản ZIP</a> rồi chạy <code>ChayLauncher.cmd</code></span>
+      <span lang="en">Windows 10 / 11 · MIT license · Blocked by "Application Control policy"? <a href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">Get the ZIP</a> and run <code>ChayLauncher.cmd</code></span>
     </p>
     <div class="shot">
       <img src="screenshots/home.png" width="1920" height="1280"
@@ -304,6 +304,11 @@
         <summary><span lang="vi">Có an toàn không? Có gửi dữ liệu đi đâu không?</span><span lang="en">Is it safe? Does it send data anywhere?</span></summary>
         <p><span lang="vi">Không. Launcher không có máy chủ, không thu thập dữ liệu. Mọi thứ chạy trên máy bạn và mã nguồn công khai để ai cũng kiểm tra được.</span>
            <span lang="en">No. There is no server and no telemetry. Everything runs locally, and the source is public for anyone to audit.</span></p>
+      </details>
+      <details>
+        <summary><span lang="vi">Windows báo "An Application Control policy has blocked this file"?</span><span lang="en">"An Application Control policy has blocked this file"?</span></summary>
+        <p><span lang="vi">Đó là <b>Smart App Control</b> của Windows 11: nó chặn hẳn mọi exe chưa được ký số, không có nút chạy tiếp. Hãy tải <a href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">bản ZIP</a>, giải nén và bấm đúp <code>ChayLauncher.cmd</code> — launcher chạy bằng script PowerShell nên không bị chặn, đầy đủ tính năng.</span>
+           <span lang="en">That is Windows 11 <b>Smart App Control</b>, which blocks every unsigned exe with no way to continue. Download the <a href="https://github.com/npduylab/windows-tablet-launcher/archive/refs/heads/main.zip">ZIP</a>, extract it and double-click <code>ChayLauncher.cmd</code> — it runs the PowerShell script, which is not blocked, with every feature.</span></p>
       </details>
       <details>
         <summary><span lang="vi">Windows SmartScreen cảnh báo khi mở exe?</span><span lang="en">SmartScreen warns when opening the exe?</span></summary>
