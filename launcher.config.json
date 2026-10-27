@@ -15,7 +15,6 @@
   "claudeUrl": "https://claude.ai/new?q={q}",
   "navBar": { "enabled": true, "position": "right", "opacity": 0.6, "autoHide": true },
   "homeGesture": true,
-  "homeOnAppClose": true,
   "pip": { "position": "bottom-right", "match": "(^|[-–] )YouTube$", "cropTop": 89, "widthPercent": 36 },
 
   "home": ["Nghe nhạc", "YouTube", "Lướt web", "Telegram", "Facebook", "TikTok", "Gmail", "Lịch", "Xem TV", "Claude", "Gemini", "Shopee"],
