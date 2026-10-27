@@ -948,6 +948,12 @@ $xaml = @'
 '@
 
 $win = [Windows.Markup.XamlReader]::Parse($xaml)
+# Icon riêng của launcher (assets\TouchLauncher.ico) — chạy bằng PowerShell thì thanh tác vụ vẫn hiện đúng icon.
+$AppIconPath = Join-Path $PSScriptRoot 'assets\TouchLauncher.ico'
+$script:AppIcon = $null
+if (Test-Path $AppIconPath) {
+    try { $script:AppIcon = [System.Windows.Media.Imaging.BitmapFrame]::Create([Uri]$AppIconPath); $win.Icon = $script:AppIcon } catch {}
+}
 $ui = @{}
 foreach ($n in 'WallImage','MainArea','BtnStatus','BatteryText','BatteryIcon','StatusTime',
                'Widgets','Clock','DateText','BatteryBig','BatteryBar','BatteryNote',

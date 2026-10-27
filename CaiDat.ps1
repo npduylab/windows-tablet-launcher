@@ -35,7 +35,8 @@ function New-Shortcut([string]$path) {
         $l.TargetPath   = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
         $l.Arguments    = "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$ps1`""
         $l.WindowStyle  = 7   # thu nhỏ, tránh nháy cửa sổ console
-        $l.IconLocation = "$env:WINDIR\System32\shell32.dll,22"
+        $ico = Join-Path $PSScriptRoot 'assets\TouchLauncher.ico'
+        $l.IconLocation = if (Test-Path $ico) { "$ico,0" } else { "$env:WINDIR\System32\shell32.dll,22" }
     }
     $l.WorkingDirectory = $PSScriptRoot
     $l.Description      = 'Touch Launcher'

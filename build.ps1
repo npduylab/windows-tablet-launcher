@@ -60,7 +60,11 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 foreach ($img in $images) { $bw.Write($img) }
 $bw.Close()
 [System.IO.File]::WriteAllBytes((Join-Path $build 'icon-256.png'), $images[-1])
-"Icon: $ico"
+$assets = Join-Path $root 'assets'
+New-Item -ItemType Directory -Force -Path $assets | Out-Null
+Copy-Item $ico (Join-Path $assets 'TouchLauncher.ico') -Force
+[System.IO.File]::WriteAllBytes((Join-Path $assets 'icon-256.png'), $images[-1])
+"Icon: $ico (và assets\TouchLauncher.ico)"
 
 # ---------------------------------------------------------------- Phiên bản
 if (-not $Version) { $Version = (Get-Content (Join-Path $root 'VERSION') -Raw).Trim() }
