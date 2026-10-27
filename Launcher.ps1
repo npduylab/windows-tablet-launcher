@@ -221,6 +221,8 @@ namespace TouchLauncher {
         }
 
         public static void Key(byte vk) { keybd_event(vk, 0, 1, UIntPtr.Zero); keybd_event(vk, 0, 3, UIntPtr.Zero); }
+        // Phím thường (không phải phím mở rộng), vd. F5.
+        public static void KeyPlain(byte vk) { keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); }
         // Win + phím (vd. Win+N mở Trung tâm thông báo & lịch của Windows).
         public static void WinCombo(byte vk) {
             keybd_event(0x5B, 0, 1, UIntPtr.Zero);
@@ -416,6 +418,15 @@ function Save-UserApps {
                            type = $_.type; target = $_.target; match = $_.match } })
     [IO.File]::WriteAllText($userAppsPath, (ConvertTo-Json -InputObject $list -Depth 4), $Utf8NoBom)
 }
+
+$migrated = $false
+foreach ($u in @($cfg.tiles | Where-Object { $_.user })) {
+    if ([string]$u.target -match '^https://mail\.google\.com/mail/u/([^/?#]+@[^/?#]+)/?$') {
+        $u.target = "https://mail.google.com/mail/u/?authuser=$([Uri]::EscapeDataString($Matches[1].ToLower()))"
+        $migrated = $true
+    }
+}
+if ($migrated) { Save-UserApps }
 
 # Trang chủ = các app được ghim (theo tên, đúng thứ tự). Chưa có pinned.json thì lấy "home" trong cấu hình.
 $script:Pins = $null
@@ -1247,11 +1258,36 @@ $LaunchTimer.Add_Tick({
         if (-not $lw.Before.Contains($w.Handle.ToInt64())) {
             [TouchLauncher.Native]::Maximize($w.Handle)
             Add-AppWindowWatch $w.Handle
+            Watch-PageError $w.Handle
             $LaunchTimer.Stop(); $script:LaunchWatch = $null
             return
         }
     }
 })
+# Trang web vừa mở mà báo lỗi tạm thời (Gmail hay gặp) -> tự tải lại trang.
+$script:ErrWatch = @{}
+$ErrRetryTimer = New-Object System.Windows.Threading.DispatcherTimer([System.Windows.Threading.DispatcherPriority]::Background)
+$ErrRetryTimer.Interval = [TimeSpan]::FromSeconds(1.5)
+$ErrRetryTimer.Add_Tick({
+    if ($script:ErrWatch.Count -eq 0) { $ErrRetryTimer.Stop(); return }
+    $titles = @{}
+    foreach ($w in [TouchLauncher.Native]::GetAppWindows($PID)) { $titles[$w.Handle.ToInt64()] = $w.Title }
+    foreach ($k in @($script:ErrWatch.Keys)) {
+        $e = $script:ErrWatch[$k]
+        if (-not $titles.ContainsKey($k) -or (Get-Date) -gt $e.Until -or $e.Tries -ge 2) { $script:ErrWatch.Remove($k); continue }
+        if ($titles[$k] -match 'Temporary Error|Lỗi tạm thời|^Error \d{3}') {
+            $e.Tries++
+            [TouchLauncher.Native]::Activate([IntPtr]$k)
+            Start-Sleep -Milliseconds 150
+            [TouchLauncher.Native]::KeyPlain(0x74)   # F5 = tải lại trang
+        }
+    }
+})
+function Watch-PageError([IntPtr]$h) {
+    $script:ErrWatch[$h.ToInt64()] = @{ Until = (Get-Date).AddSeconds(20); Tries = 0 }
+    $ErrRetryTimer.Start()
+}
+
 function Watch-NewWindow {
     if ($cfg.appWindowMode -eq 'normal') { return }
     $set = New-Object 'System.Collections.Generic.HashSet[long]'
@@ -1265,7 +1301,15 @@ function Invoke-Tile($t) {
     if ($t.type -eq 'folder') { Show-Folder $t; return }
     if ($t.type -eq 'window') { Switch-ToWindow $t.handle; return }
     $existing = Find-TileWindow $t
-    if ($existing) { Switch-ToWindow $existing.Handle; return }
+    if ($existing) {
+        Switch-ToWindow $existing.Handle
+        # Cửa sổ đang mở mà còn trang lỗi tạm thời (vd. Gmail) -> tải lại luôn.
+        if ($existing.Title -match 'Temporary Error|Lỗi tạm thời|^Error \d{3}') {
+            Start-Sleep -Milliseconds 150
+            [TouchLauncher.Native]::KeyPlain(0x74)
+        }
+        return
+    }
 
     $target = [Environment]::ExpandEnvironmentVariables([string]$t.target)
     Watch-NewWindow
@@ -3165,8 +3209,12 @@ $FetchSiteWork = {
 
 # ---- Gmail theo tài khoản: mỗi email một icon, mở đúng hộp thư qua mail.google.com/mail/u/<email>/
 $EmailPattern = '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-function Get-GmailTarget([string]$email) { "https://mail.google.com/mail/u/$($email.ToLower())/" }
-function Test-GmailAdded([string]$email) { [bool](@($cfg.tiles | Where-Object { $_.target -eq (Get-GmailTarget $email) }).Count) }
+function Get-GmailTarget([string]$email) { "https://mail.google.com/mail/u/?authuser=$([Uri]::EscapeDataString($email.ToLower()))" }
+# Đã có icon cho email này chưa (so theo email trong địa chỉ, kể cả dạng cũ /mail/u/<email>/).
+function Test-GmailAdded([string]$email) {
+    $e = $email.ToLower(); $enc = [Uri]::EscapeDataString($e)
+    [bool](@($cfg.tiles | Where-Object { $t = ([string]$_.target).ToLower(); $t.Contains("authuser=$enc") -or $t.Contains("/mail/u/$e/") }).Count)
+}
 
 # Tài khoản Gmail đang mở trên máy (đọc từ tiêu đề cửa sổ "... - ten@gmail.com - Gmail").
 function Get-OpenGmailAccounts {
