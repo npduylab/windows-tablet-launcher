@@ -23,6 +23,7 @@
   "tiles": [
     { "group": "Âm nhạc & Video", "name": "Nghe nhạc",  "icon": "E8D6", "color": "#FF375F", "type": "app", "target": "https://music.youtube.com", "match": "YouTube Music" },
     { "group": "Âm nhạc & Video", "name": "YouTube",    "icon": "E768", "color": "#FF3B30", "type": "app", "target": "https://www.youtube.com", "match": "(^|[-–] )YouTube$" },
+    { "group": "Âm nhạc & Video", "name": "YouTube Kids", "icon": "E768", "color": "#FF6A3D", "type": "app", "target": "https://www.youtubekids.com", "match": "YouTube Kids" },
     { "group": "Âm nhạc & Video", "name": "NhacCuaTui", "icon": "E8D6", "color": "#1FA2E8", "type": "app", "target": "https://www.nhaccuatui.com", "match": "(?i)NhacCuaTui|NCT" },
     { "group": "Âm nhạc & Video", "name": "Xem TV",     "icon": "E7F4", "color": "#0A5FB4", "type": "app", "target": "https://vtvgo.vn", "match": "VTV ?[Gg]o" },
 
